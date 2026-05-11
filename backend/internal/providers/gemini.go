@@ -255,9 +255,9 @@ func (p *GeminiProvider) toGeminiRequest(req openai.ChatCompletionRequest) map[s
 	body := map[string]any{
 		"contents": contents,
 		"generationConfig": map[string]any{
-			"temperature": req.Temperature,
-			"topP":        req.TopP,
-			"maxOutputTokens": max(256, req.MaxTokens),
+			"temperature":     req.Temperature,
+			"topP":            req.TopP,
+			"maxOutputTokens": maxInt(256, req.MaxTokens),
 		},
 	}
 	if len(systemParts) > 0 {

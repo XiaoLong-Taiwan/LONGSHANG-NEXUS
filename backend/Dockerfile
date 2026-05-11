@@ -5,6 +5,7 @@ COPY backend/go.mod ./
 RUN go mod download
 
 COPY backend/. .
+RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/server ./cmd/server
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/worker ./cmd/worker
 

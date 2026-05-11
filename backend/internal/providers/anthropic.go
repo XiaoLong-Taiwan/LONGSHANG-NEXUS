@@ -221,7 +221,7 @@ func (p *AnthropicProvider) toAnthropicRequest(req openai.ChatCompletionRequest,
 	body := map[string]any{
 		"model":      req.Model,
 		"messages":   messages,
-		"max_tokens": max(256, req.MaxTokens),
+		"max_tokens": maxInt(256, req.MaxTokens),
 		"stream":     stream,
 	}
 	if len(systemParts) > 0 {

@@ -110,3 +110,10 @@ func stringifyContent(content any) string {
 		return string(payload)
 	}
 }
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
