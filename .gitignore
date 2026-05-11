@@ -1,0 +1,8 @@
+.env
+backend/.env
+frontend/.env
+backend/go.sum
+backend/bin
+frontend/.next
+frontend/node_modules
+frontend/out
