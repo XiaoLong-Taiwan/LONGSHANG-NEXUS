@@ -53,8 +53,12 @@ export async function login(email: string, password: string) {
   return apiRequest<{ token: string; user: { id: string; email: string; role: string } }>("/api/auth/login", "POST", { email, password }, "");
 }
 
+export async function currentUser() {
+  return apiRequest<{ user: { id: string; email: string; role: string } }>("/api/auth/me", "GET");
+}
+
 export async function probeConnection() {
-  return apiRequest<{ status: string; service: string }>("/health", "GET", undefined, "");
+ return apiRequest<{ status: string; service: string }>("/health", "GET", undefined, "");
 }
 
 export function withAdminPath(path: string) {

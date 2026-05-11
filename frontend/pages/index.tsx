@@ -33,6 +33,13 @@ export default function HomePage() {
     setConnections(items);
     setActiveConnectionId(active.id);
     setEmail(getLastEmail());
+    if (typeof router.query.error === "string") {
+      if (router.query.error === "admin") {
+        setError("This account does not have admin console access.");
+      } else if (router.query.error === "session") {
+        setError("Your previous session is no longer valid. Please sign in again.");
+      }
+    }
   }, [router]);
 
   async function handleSubmit(event: FormEvent) {
@@ -42,6 +49,10 @@ export default function HomePage() {
     try {
       setLastEmail(email);
       const result = await login(email, password);
+      if (result.user.role !== "admin") {
+        setError("This account can sign in, but it does not have admin console access.");
+        return;
+      }
       setToken(result.token);
       router.push("/dashboard");
     } catch (err) {

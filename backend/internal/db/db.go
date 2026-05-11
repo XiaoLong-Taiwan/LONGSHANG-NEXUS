@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -83,19 +84,25 @@ func verifySchema(database *gorm.DB) error {
 }
 
 func seedAdmin(database *gorm.DB, cfg config.Config) error {
-	var count int64
-	if err := database.Model(&models.User{}).Where("email = ?", cfg.AdminEmail).Count(&count).Error; err != nil {
-		return err
-	}
-	if count > 0 {
-		return nil
-	}
-
 	hash, err := auth.HashPassword(cfg.AdminPassword)
 	if err != nil {
 		return err
 	}
-	admin := models.User{
+
+	var admin models.User
+	err = database.Where("email = ?", cfg.AdminEmail).First(&admin).Error
+	if err == nil {
+		updates := map[string]any{
+			"role":          "admin",
+			"password_hash": hash,
+		}
+		return database.Model(&admin).Updates(updates).Error
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
+	admin = models.User{
 		Email:        cfg.AdminEmail,
 		PasswordHash: hash,
 		Role:         "admin",

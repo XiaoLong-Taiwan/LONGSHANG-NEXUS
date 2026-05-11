@@ -106,6 +106,16 @@ func (h *Handler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"user": user, "token": token})
 }
 
+func (h *Handler) CurrentUser(c *gin.Context) {
+	value, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found in context"})
+		return
+	}
+	user := value.(models.User)
+	c.JSON(http.StatusOK, gin.H{"user": user})
+}
+
 func (h *Handler) OAuthLogin(c *gin.Context) {
 	providerName := c.Param("provider")
 	conf, err := h.oauthConfig(providerName)

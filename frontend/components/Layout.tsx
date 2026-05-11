@@ -2,7 +2,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { PropsWithChildren, useEffect, useState } from "react";
 
-import { clearToken, getToken } from "../lib/api";
+import { clearToken, currentUser, getToken } from "../lib/api";
 import { getActiveConnection } from "../lib/connections";
 
 const navItems = [
@@ -26,6 +26,17 @@ export default function Layout({ children }: PropsWithChildren) {
       return;
     }
     setConnectionName(getActiveConnection().name);
+    currentUser()
+      .then((result) => {
+        if (result.user.role !== "admin") {
+          clearToken();
+          router.replace("/?error=admin");
+        }
+      })
+      .catch(() => {
+        clearToken();
+        router.replace("/?error=session");
+      });
   }, [router]);
 
   return (

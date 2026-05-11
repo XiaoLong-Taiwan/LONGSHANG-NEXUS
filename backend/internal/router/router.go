@@ -31,6 +31,12 @@ func Setup(cfg config.Config, db *gorm.DB, redis *redis.Client, handler *api.Han
 		authGroup.GET("/oauth/:provider/callback", handler.OAuthCallback)
 	}
 
+	authProtected := engine.Group("/api/auth")
+	authProtected.Use(middleware.JWTAuth(cfg, db))
+	{
+		authProtected.GET("/me", handler.CurrentUser)
+	}
+
 	admin := engine.Group("/api/admin")
 	admin.Use(middleware.JWTAuth(cfg, db), middleware.AdminOnly())
 	{
