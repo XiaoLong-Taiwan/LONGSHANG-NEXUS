@@ -1,6 +1,6 @@
 # AI Gateway
 
-High-performance AI API Gateway built with Go, PostgreSQL, Redis, and Next.js. The system exposes OpenAI-compatible endpoints while routing requests to OpenAI, Google Gemini, and Anthropic Claude. It focuses only on API transit, schema normalization, key management, proxy routing, model sync, fallback, and self-hosted monitoring.
+High-performance AI API Gateway built with Go, PostgreSQL, Redis, Next.js, and nginx. The system exposes OpenAI-compatible endpoints while routing requests to OpenAI, Google Gemini, and Anthropic Claude. It focuses only on API transit, schema normalization, key management, proxy routing, model sync, fallback, and self-hosted monitoring.
 
 The project intentionally excludes payment, recharge, token sales, balance, subscription, and billing logic.
 
@@ -17,6 +17,7 @@ The project intentionally excludes payment, recharge, token sales, balance, subs
 - Redis-backed rate limiting
 - Self-hosted monitoring dashboard without Grafana
 - Dockerized deployment with nginx as the only public entry point
+- nginx reverse proxy optimized for frontend SSR, OpenAI-compatible APIs, streaming responses, and long-lived requests
 
 ## Project Structure
 
@@ -86,6 +87,7 @@ Default admin credentials come from `.env`:
 - Monitoring: custom dashboard backed by `usage_logs`
 - Provider routing: model registry first, naming heuristics second
 - Fallback: next provider key, then next provider
+- Runtime health checks: nginx, frontend, and API all expose container health probes in Docker Compose
 
 ## Main APIs
 
@@ -210,6 +212,25 @@ Core tables:
 - `usage_logs` power the dashboard for request volume, token usage, provider latency, error rate, and proxy latency.
 - API keys are stored as SHA-256 hashes in the `key` column. The raw key is only returned at create and rotate time.
 - The homepage now uses a direct local login flow and does not show third-party sign-in buttons.
+- nginx proxies `/`, `/_next/*` to the frontend and `/api/*`, `/v1/*`, `/health` to the backend.
+- `/v1/*` on nginx is configured for streaming compatibility with disabled proxy buffering and longer read timeouts.
+
+## Troubleshooting
+
+If `http://localhost:8080` still does not open after rebuild, check service health first:
+
+```bash
+docker compose ps
+docker compose logs nginx --tail=100
+docker compose logs frontend --tail=100
+docker compose logs api --tail=100
+```
+
+Expected healthy path through the stack:
+
+- Browser -> `nginx:80`
+- nginx -> `frontend:3000` for pages and static assets
+- nginx -> `api:8080` for `/api/*`, `/v1/*`, `/health`
 
 ## Known Limits
 

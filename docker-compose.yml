@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: ai-gateway-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ai_gateway
       POSTGRES_USER: postgres
@@ -18,6 +19,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: ai-gateway-redis
+    restart: unless-stopped
     volumes:
       - redis_data:/data
 
@@ -26,10 +28,17 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     container_name: ai-gateway-api
+    restart: unless-stopped
     env_file:
       - .env
     expose:
       - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,6 +50,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     container_name: ai-gateway-worker
+    restart: unless-stopped
     command: ["/app/worker"]
     env_file:
       - .env
@@ -57,26 +67,40 @@ services:
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
     container_name: ai-gateway-frontend
+    restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
     expose:
       - "3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000 >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
 
   nginx:
     image: nginx:1.27-alpine
     container_name: ai-gateway-nginx
+    restart: unless-stopped
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "${GATEWAY_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/nginx-health >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     depends_on:
       frontend:
-        condition: service_started
+        condition: service_healthy
       api:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   postgres_data:
