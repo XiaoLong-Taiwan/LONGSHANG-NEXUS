@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strings"
 	"strconv"
 	"time"
 
@@ -21,6 +22,7 @@ type Config struct {
 	TLSKeyFile            string
 	JWTSecret             string
 	FrontendURL           string
+	CORSAllowOrigins      []string
 	AdminEmail            string
 	AdminPassword         string
 	GoogleClientID        string
@@ -50,6 +52,7 @@ func Load() Config {
 		TLSKeyFile:            getEnv("TLS_KEY_FILE", ""),
 		JWTSecret:             getEnv("JWT_SECRET", "change-me"),
 		FrontendURL:           getEnv("FRONTEND_URL", "http://localhost:8080"),
+		CORSAllowOrigins:      getCSV("CORS_ALLOW_ORIGINS", []string{}),
 		AdminEmail:            getEnv("ADMIN_EMAIL", "admin@example.com"),
 		AdminPassword:         getEnv("ADMIN_PASSWORD", "admin123456"),
 		GoogleClientID:        getEnv("GOOGLE_CLIENT_ID", ""),
@@ -102,4 +105,23 @@ func getBool(key string, fallback bool) bool {
 		return fallback
 	}
 	return parsed
+}
+
+func getCSV(key string, fallback []string) []string {
+	raw := getEnv(key, "")
+	if raw == "" {
+		return fallback
+	}
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value != "" {
+			result = append(result, value)
+		}
+	}
+	if len(result) == 0 {
+		return fallback
+	}
+	return result
 }

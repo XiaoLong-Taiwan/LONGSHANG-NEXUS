@@ -4,6 +4,7 @@ import (
 	"ai-gateway/backend/internal/api"
 	"ai-gateway/backend/internal/config"
 	"ai-gateway/backend/internal/middleware"
+	"strings"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -14,7 +15,8 @@ import (
 func Setup(cfg config.Config, db *gorm.DB, redis *redis.Client, handler *api.Handler) *gin.Engine {
 	engine := gin.Default()
 	engine.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{cfg.FrontendURL, "http://localhost:3000"},
+		AllowOrigins:     allowedOrigins(cfg),
+		AllowOriginFunc:  buildOriginFunc(cfg),
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Authorization", "Content-Type"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -80,4 +82,52 @@ func Setup(cfg config.Config, db *gorm.DB, redis *redis.Client, handler *api.Han
 	}
 
 	return engine
+}
+
+func allowedOrigins(cfg config.Config) []string {
+	origins := []string{
+		cfg.FrontendURL,
+		"http://localhost:8080",
+		"http://127.0.0.1:8080",
+		"https://localhost:8080",
+		"https://127.0.0.1:8080",
+		"http://localhost:3000",
+		"http://127.0.0.1:3000",
+	}
+	origins = append(origins, cfg.CORSAllowOrigins...)
+	return dedupeStrings(origins)
+}
+
+func buildOriginFunc(cfg config.Config) func(string) bool {
+	staticOrigins := allowedOrigins(cfg)
+	return func(origin string) bool {
+		if origin == "" {
+			return true
+		}
+		for _, item := range staticOrigins {
+			if item == origin {
+				return true
+			}
+		}
+		if cfg.AppEnv != "production" && (strings.HasPrefix(origin, "http://") || strings.HasPrefix(origin, "https://")) {
+			return true
+		}
+		return false
+	}
+}
+
+func dedupeStrings(values []string) []string {
+	seen := map[string]struct{}{}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }

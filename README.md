@@ -93,6 +93,7 @@ Default admin credentials come from `.env`:
 - Runtime health checks: frontend and API both expose container health probes in Docker Compose
 - Schema strategy: PostgreSQL is initialized from SQL files; GORM auto-migration is disabled by default to avoid constraint-name drift
 - Frontend transport: custom Next.js server with optional HTTPS and a built-in proxy route for backend selection
+- CORS strategy: in development, browser origins are allowed broadly; in production, set `CORS_ALLOW_ORIGINS` explicitly
 
 ## Main APIs
 
@@ -220,6 +221,7 @@ Core tables:
 - The frontend panel stores multiple backend connection profiles in browser local storage and proxies requests through its own `/api/proxy/*` route.
 - If frontend and backend are deployed together in Docker, keep `DEFAULT_BACKEND_INTERNAL_URL=http://api:18437` in `.env`.
 - To enable HTTPS, mount certificate files into `certs/frontend` or `certs/backend` and set `FRONTEND_TLS_ENABLED=true` or `TLS_ENABLED=true`.
+- If your panel is accessed from a domain or public IP in production, set `CORS_ALLOW_ORIGINS=https://your-frontend.example.com,http://your-ip:8080`.
 
 ## Troubleshooting
 
