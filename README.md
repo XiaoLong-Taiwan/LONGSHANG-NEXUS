@@ -1,6 +1,6 @@
 # AI Gateway
 
-High-performance AI API Gateway built with Go, PostgreSQL, Redis, Next.js, and nginx. The system exposes OpenAI-compatible endpoints while routing requests to OpenAI, Google Gemini, and Anthropic Claude. It focuses only on API transit, schema normalization, key management, proxy routing, model sync, fallback, and self-hosted monitoring.
+High-performance AI API Gateway built with Go, PostgreSQL, Redis, and Next.js. The system exposes OpenAI-compatible endpoints while routing requests to OpenAI, Google Gemini, and Anthropic Claude. It focuses only on API transit, schema normalization, key management, proxy routing, model sync, fallback, and self-hosted monitoring.
 
 The project intentionally excludes payment, recharge, token sales, balance, subscription, and billing logic.
 
@@ -16,8 +16,9 @@ The project intentionally excludes payment, recharge, token sales, balance, subs
 - Model registry sync worker
 - Redis-backed rate limiting
 - Self-hosted monitoring dashboard without Grafana
-- Dockerized deployment with nginx as the only public entry point
-- nginx reverse proxy optimized for frontend SSR, OpenAI-compatible APIs, streaming responses, and long-lived requests
+- Dockerized deployment with clearly separated frontend and backend services
+- Frontend panel can switch between multiple backend gateways without redeploying
+- Optional HTTPS for both frontend and backend
 
 ## Project Structure
 
@@ -45,8 +46,8 @@ ai-gateway/
 |   |-- lib
 |   |-- pages
 |   `-- styles
+|-- certs/
 |-- docker-compose.yml
-|-- nginx/
 `-- .env.example
 ```
 
@@ -60,6 +61,7 @@ cp .env.example .env
 
 2. Fill in provider keys, OAuth credentials, and JWT secret.
    By default, `DB_AUTO_MIGRATE=false`, so the backend will use the SQL schema from `backend/migrations/001_init.sql` instead of mutating constraints at runtime.
+   The default frontend backend target is `http://api:18437`, which is meant for Docker internal networking when frontend and backend run together.
 
 3. Start the full stack.
 
@@ -67,11 +69,12 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Service after boot:
+Services after boot:
 
-- Unified gateway entry: `http://localhost:8080`
+- Frontend panel: `http://localhost:8080`
+- Backend API: `http://localhost:18437`
 
-Only nginx is exposed publicly. Frontend, API, PostgreSQL, and Redis stay inside the Docker network.
+When both run inside Docker Compose, the frontend server proxies backend requests using Docker internal networking. In the browser, you only visit the frontend port.
 
 Default admin credentials come from `.env`:
 
@@ -81,15 +84,15 @@ Default admin credentials come from `.env`:
 ## Architecture Notes
 
 - Backend framework: Gin
-- Edge gateway: Nginx
 - Database: PostgreSQL
 - Cache and rate limiting: Redis
 - Admin UI: Next.js + React + Tailwind CSS
 - Monitoring: custom dashboard backed by `usage_logs`
 - Provider routing: model registry first, naming heuristics second
 - Fallback: next provider key, then next provider
-- Runtime health checks: nginx, frontend, and API all expose container health probes in Docker Compose
+- Runtime health checks: frontend and API both expose container health probes in Docker Compose
 - Schema strategy: PostgreSQL is initialized from SQL files; GORM auto-migration is disabled by default to avoid constraint-name drift
+- Frontend transport: custom Next.js server with optional HTTPS and a built-in proxy route for backend selection
 
 ## Main APIs
 
@@ -123,7 +126,7 @@ Default admin credentials come from `.env`:
 ### Chat Completions
 
 ```bash
-curl http://localhost:8080/v1/chat/completions \
+curl http://localhost:18437/v1/chat/completions \
   -H "Authorization: Bearer YOUR_GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -139,7 +142,7 @@ curl http://localhost:8080/v1/chat/completions \
 ### Streaming Chat
 
 ```bash
-curl http://localhost:8080/v1/chat/completions \
+curl http://localhost:18437/v1/chat/completions \
   -H "Authorization: Bearer YOUR_GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -N \
@@ -153,7 +156,7 @@ curl http://localhost:8080/v1/chat/completions \
 ### Embeddings
 
 ```bash
-curl http://localhost:8080/v1/embeddings \
+curl http://localhost:18437/v1/embeddings \
   -H "Authorization: Bearer YOUR_GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -165,7 +168,7 @@ curl http://localhost:8080/v1/embeddings \
 ### Image Generation
 
 ```bash
-curl http://localhost:8080/v1/images/generations \
+curl http://localhost:18437/v1/images/generations \
   -H "Authorization: Bearer YOUR_GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -182,7 +185,7 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   apiKey: process.env.GATEWAY_API_KEY,
-  baseURL: "http://localhost:8080/v1",
+  baseURL: "http://localhost:18437/v1",
 });
 
 const completion = await client.chat.completions.create({
@@ -214,25 +217,25 @@ Core tables:
 - `usage_logs` power the dashboard for request volume, token usage, provider latency, error rate, and proxy latency.
 - API keys are stored as SHA-256 hashes in the `key` column. The raw key is only returned at create and rotate time.
 - The homepage now uses a direct local login flow and does not show third-party sign-in buttons.
-- nginx proxies `/`, `/_next/*` to the frontend and `/api/*`, `/v1/*`, `/health` to the backend.
-- `/v1/*` on nginx is configured for streaming compatibility with disabled proxy buffering and longer read timeouts.
+- The frontend panel stores multiple backend connection profiles in browser local storage and proxies requests through its own `/api/proxy/*` route.
+- If frontend and backend are deployed together in Docker, keep `DEFAULT_BACKEND_INTERNAL_URL=http://api:18437` in `.env`.
+- To enable HTTPS, mount certificate files into `certs/frontend` or `certs/backend` and set `FRONTEND_TLS_ENABLED=true` or `TLS_ENABLED=true`.
 
 ## Troubleshooting
 
-If `http://localhost:8080` still does not open after rebuild, check service health first:
+If the frontend on `http://localhost:8080` or backend on `http://localhost:18437` does not open after rebuild, check service health first:
 
 ```bash
 docker compose ps
-docker compose logs nginx --tail=100
 docker compose logs frontend --tail=100
 docker compose logs api --tail=100
 ```
 
 Expected healthy path through the stack:
 
-- Browser -> `nginx:80`
-- nginx -> `frontend:3000` for pages and static assets
-- nginx -> `api:8080` for `/api/*`, `/v1/*`, `/health`
+- Browser -> `frontend:8080`
+- Frontend custom server -> selected backend via `/api/proxy/*`
+- OpenAI SDK or external clients -> `backend:18437`
 
 ## Known Limits
 

@@ -6,3 +6,5 @@ backend/bin
 frontend/.next
 frontend/node_modules
 frontend/out
+certs/**/*.crt
+certs/**/*.key

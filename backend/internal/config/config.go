@@ -12,9 +12,13 @@ import (
 type Config struct {
 	AppEnv                string
 	Port                  string
+	Host                  string
 	DatabaseURL           string
 	DBAutoMigrate         bool
 	RedisURL              string
+	TLSEnabled            bool
+	TLSCertFile           string
+	TLSKeyFile            string
 	JWTSecret             string
 	FrontendURL           string
 	AdminEmail            string
@@ -36,10 +40,14 @@ func Load() Config {
 
 	cfg := Config{
 		AppEnv:                getEnv("APP_ENV", "development"),
-		Port:                  getEnv("PORT", "8080"),
+		Port:                  getEnv("PORT", "18437"),
+		Host:                  getEnv("HOST", "0.0.0.0"),
 		DatabaseURL:           getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ai_gateway?sslmode=disable"),
 		DBAutoMigrate:         getBool("DB_AUTO_MIGRATE", false),
 		RedisURL:              getEnv("REDIS_URL", "redis://localhost:6379/0"),
+		TLSEnabled:            getBool("TLS_ENABLED", false),
+		TLSCertFile:           getEnv("TLS_CERT_FILE", ""),
+		TLSKeyFile:            getEnv("TLS_KEY_FILE", ""),
 		JWTSecret:             getEnv("JWT_SECRET", "change-me"),
 		FrontendURL:           getEnv("FRONTEND_URL", "http://localhost:8080"),
 		AdminEmail:            getEnv("ADMIN_EMAIL", "admin@example.com"),
@@ -57,6 +65,9 @@ func Load() Config {
 
 	if cfg.JWTSecret == "change-me" && cfg.AppEnv == "production" {
 		log.Println("warning: JWT_SECRET is using the default value")
+	}
+	if cfg.TLSEnabled {
+		log.Printf("backend tls enabled with cert=%s key=%s", cfg.TLSCertFile, cfg.TLSKeyFile)
 	}
 
 	return cfg

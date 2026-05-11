@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/tls"
 	"log"
+	"net/http"
 
 	"ai-gateway/backend/internal/api"
 	"ai-gateway/backend/internal/config"
@@ -32,8 +34,23 @@ func main() {
 	handler := api.NewHandler(cfg, clients.DB, providerManager, keyPool, modelRouter, usageService, monitoring, modelSync)
 
 	engine := router.Setup(cfg, clients.DB, clients.Redis, handler)
-	log.Printf("ai gateway listening on :%s", cfg.Port)
-	if err := engine.Run(":" + cfg.Port); err != nil {
+	address := cfg.Host + ":" + cfg.Port
+	server := &http.Server{
+		Addr:    address,
+		Handler: engine,
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		},
+	}
+	if cfg.TLSEnabled {
+		log.Printf("ai gateway listening on https://%s", address)
+		if err := server.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil {
+			log.Fatalf("run tls server: %v", err)
+		}
+		return
+	}
+	log.Printf("ai gateway listening on http://%s", address)
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("run server: %v", err)
 	}
 }

@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { PropsWithChildren, useEffect } from "react";
+import { PropsWithChildren, useEffect, useState } from "react";
 
 import { clearToken, getToken } from "../lib/api";
+import { getActiveConnection } from "../lib/connections";
 
 const navItems = [
   { href: "/dashboard", label: "Overview" },
+  { href: "/dashboard/connections", label: "Connections" },
   { href: "/dashboard/users", label: "Users" },
   { href: "/dashboard/api-keys", label: "API Keys" },
   { href: "/dashboard/provider-keys", label: "Provider Keys" },
@@ -16,11 +18,14 @@ const navItems = [
 
 export default function Layout({ children }: PropsWithChildren) {
   const router = useRouter();
+  const [connectionName, setConnectionName] = useState("Backend");
 
   useEffect(() => {
     if (!getToken()) {
       router.replace("/");
+      return;
     }
+    setConnectionName(getActiveConnection().name);
   }, [router]);
 
   return (
@@ -31,6 +36,9 @@ export default function Layout({ children }: PropsWithChildren) {
             <p className="text-xs uppercase tracking-[0.32em] text-white/60">AI Gateway</p>
             <h1 className="mt-3 text-3xl font-semibold">Control Plane</h1>
             <p className="mt-3 text-sm text-white/70">OpenAI-compatible routing for OpenAI, Claude, Gemini, proxy pools, key rotation, and monitoring.</p>
+            <div className="mt-5 rounded-2xl bg-white/10 px-4 py-3 text-sm text-white/85">
+              Connected backend: <span className="font-semibold">{connectionName}</span>
+            </div>
           </div>
           <nav className="space-y-2 p-4">
             {navItems.map((item) => {

@@ -1,4 +1,6 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+import { getActiveConnection } from "./connections";
+
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "/api/proxy";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 
@@ -18,13 +20,16 @@ export function clearToken() {
 }
 
 export async function apiRequest<T>(path: string, method: HttpMethod = "GET", body?: unknown, token = getToken()): Promise<T> {
+  const connection = typeof window === "undefined" ? null : getActiveConnection();
   let response: Response;
   try {
     response = await fetch(`${API_BASE}${path}`, {
       method,
       headers: {
         "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(connection ? { "x-ai-gateway-target": connection.baseUrl } : {}),
+        ...(connection ? { "x-ai-gateway-insecure-tls": String(connection.allowInsecureTls) } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -46,6 +51,10 @@ export async function apiRequest<T>(path: string, method: HttpMethod = "GET", bo
 
 export async function login(email: string, password: string) {
   return apiRequest<{ token: string; user: { id: string; email: string; role: string } }>("/api/auth/login", "POST", { email, password }, "");
+}
+
+export async function probeConnection() {
+  return apiRequest<{ status: string; service: string }>("/health", "GET", undefined, "");
 }
 
 export function withAdminPath(path: string) {
