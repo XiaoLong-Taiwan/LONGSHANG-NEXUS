@@ -1,7 +1,7 @@
 import { useRouter } from "next/router";
 import { FormEvent, useEffect, useState } from "react";
 
-import { API_BASE, login, setToken } from "../lib/api";
+import { login, setToken } from "../lib/api";
 
 export default function HomePage() {
   const router = useRouter();
@@ -48,7 +48,7 @@ export default function HomePage() {
           {[
             "OpenAI-compatible endpoints",
             "Proxy-aware provider key pool",
-            "Self-hosted monitoring dashboard",
+            "Single-port nginx edge gateway",
           ].map((item) => (
             <div key={item} className="panel p-5 text-sm font-medium text-slate-700">
               {item}
@@ -61,6 +61,9 @@ export default function HomePage() {
         <div className="mb-6">
           <p className="text-sm font-medium text-slate-500">Admin sign-in</p>
           <h2 className="mt-2 text-3xl font-semibold text-slate-950">Gateway Console</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            Use the local admin account to enter the control plane. Third-party login is hidden from the homepage for a cleaner self-hosted flow.
+          </p>
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
@@ -71,14 +74,8 @@ export default function HomePage() {
             {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
-
-        <div className="mt-6 grid gap-3 md:grid-cols-2">
-          <a className="btn-secondary text-center" href={`${API_BASE}/api/auth/oauth/google/login`}>
-            Continue with Google
-          </a>
-          <a className="btn-secondary text-center" href={`${API_BASE}/api/auth/oauth/github/login`}>
-            Continue with GitHub
-          </a>
+        <div className="mt-6 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+          Default development account: <span className="font-semibold text-slate-900">admin@example.com</span>
         </div>
       </section>
     </div>

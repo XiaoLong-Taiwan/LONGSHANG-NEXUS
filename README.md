@@ -10,13 +10,13 @@ The project intentionally excludes payment, recharge, token sales, balance, subs
 - Provider adapters for OpenAI, Gemini, and Claude with provider fallback
 - API key management with rotate, disable, delete, per-key rate limit, and allowed-model policy
 - Multi-user system with `admin` and `user` roles
-- Google OAuth and GitHub OAuth login, plus OAuth token export
+- Google OAuth and GitHub OAuth integration in backend, with local credential login as the default console entry
 - Proxy node pool with HTTP and SOCKS5 support
 - Provider key pool with priority, round-robin, and least-used strategies
 - Model registry sync worker
 - Redis-backed rate limiting
 - Self-hosted monitoring dashboard without Grafana
-- Dockerized deployment for API, worker, PostgreSQL, Redis, and frontend
+- Dockerized deployment with nginx as the only public entry point
 
 ## Project Structure
 
@@ -45,6 +45,7 @@ ai-gateway/
 |   |-- pages
 |   `-- styles
 |-- docker-compose.yml
+|-- nginx/
 `-- .env.example
 ```
 
@@ -64,12 +65,11 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Services after boot:
+Service after boot:
 
-- Frontend: `http://localhost:3000`
-- API Gateway: `http://localhost:8080`
-- PostgreSQL: `localhost:5432`
-- Redis: `localhost:6379`
+- Unified gateway entry: `http://localhost:8080`
+
+Only nginx is exposed publicly. Frontend, API, PostgreSQL, and Redis stay inside the Docker network.
 
 Default admin credentials come from `.env`:
 
@@ -79,6 +79,7 @@ Default admin credentials come from `.env`:
 ## Architecture Notes
 
 - Backend framework: Gin
+- Edge gateway: Nginx
 - Database: PostgreSQL
 - Cache and rate limiting: Redis
 - Admin UI: Next.js + React + Tailwind CSS
@@ -208,6 +209,7 @@ Core tables:
 - The worker process periodically syncs upstream model catalogs into `model_registry`.
 - `usage_logs` power the dashboard for request volume, token usage, provider latency, error rate, and proxy latency.
 - API keys are stored as SHA-256 hashes in the `key` column. The raw key is only returned at create and rotate time.
+- The homepage now uses a direct local login flow and does not show third-party sign-in buttons.
 
 ## Known Limits
 

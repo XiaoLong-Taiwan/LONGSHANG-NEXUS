@@ -1,4 +1,4 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 
@@ -18,14 +18,19 @@ export function clearToken() {
 }
 
 export async function apiRequest<T>(path: string, method: HttpMethod = "GET", body?: unknown, token = getToken()): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (error) {
+    throw new Error("Cannot reach API gateway. Check whether the backend service is running.");
+  }
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({ error: response.statusText }));

@@ -39,7 +39,7 @@ func Load() Config {
 		DatabaseURL:           getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ai_gateway?sslmode=disable"),
 		RedisURL:              getEnv("REDIS_URL", "redis://localhost:6379/0"),
 		JWTSecret:             getEnv("JWT_SECRET", "change-me"),
-		FrontendURL:           getEnv("FRONTEND_URL", "http://localhost:3000"),
+		FrontendURL:           getEnv("FRONTEND_URL", "http://localhost:8080"),
 		AdminEmail:            getEnv("ADMIN_EMAIL", "admin@example.com"),
 		AdminPassword:         getEnv("ADMIN_PASSWORD", "admin123456"),
 		GoogleClientID:        getEnv("GOOGLE_CLIENT_ID", ""),
