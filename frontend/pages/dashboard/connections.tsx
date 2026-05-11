@@ -5,6 +5,7 @@ import Layout from "../../components/Layout";
 import PageHeader from "../../components/PageHeader";
 import { probeConnection } from "../../lib/api";
 import { getActiveConnection, loadConnections, removeConnection, setActiveConnection, upsertConnection, type BackendConnection } from "../../lib/connections";
+import { useI18n } from "../../lib/i18n";
 
 const emptyForm: BackendConnection = {
   id: "",
@@ -14,6 +15,7 @@ const emptyForm: BackendConnection = {
 };
 
 export default function ConnectionsPage() {
+  const { t } = useI18n();
   const [items, setItems] = useState<BackendConnection[]>([]);
   const [activeId, setActiveId] = useState("");
   const [status, setStatus] = useState("");
@@ -43,7 +45,7 @@ export default function ConnectionsPage() {
 
   return (
     <Layout>
-      <PageHeader title="Connections" description="Manage multiple backend gateways. Each browser session can switch between backend nodes without redeploying the frontend." />
+      <PageHeader title={t("connections.title")} description={t("connections.description")} />
 
       {status ? <div className="panel p-6 text-slate-700">{status}</div> : null}
 

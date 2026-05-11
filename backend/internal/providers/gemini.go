@@ -24,7 +24,7 @@ func NewGeminiProvider(timeout time.Duration) *GeminiProvider {
 func (p *GeminiProvider) Name() string { return "gemini" }
 
 func (p *GeminiProvider) ChatCompletions(ctx context.Context, route Route, req openai.ChatCompletionRequest) (*openai.ChatCompletionResponse, error) {
-	response, err := jsonRequest(ctx, http.MethodPost, p.endpoint(route.Model, "generateContent", route.ProviderKey.APIKey), p.toGeminiRequest(req), nil, p.timeout, route.ProxyNode)
+	response, err := jsonRequest(ctx, http.MethodPost, p.endpoint(route.Model, "generateContent", route.Credential), p.toGeminiRequest(req), nil, p.timeout, route.ProxyNode)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +56,7 @@ func (p *GeminiProvider) ChatCompletions(ctx context.Context, route Route, req o
 }
 
 func (p *GeminiProvider) StreamChatCompletions(ctx context.Context, route Route, req openai.ChatCompletionRequest, writer http.ResponseWriter) error {
-	response, err := jsonRequest(ctx, http.MethodPost, p.endpoint(route.Model, "streamGenerateContent?alt=sse", route.ProviderKey.APIKey), p.toGeminiRequest(req), nil, p.timeout, route.ProxyNode)
+	response, err := jsonRequest(ctx, http.MethodPost, p.endpoint(route.Model, "streamGenerateContent?alt=sse", route.Credential), p.toGeminiRequest(req), nil, p.timeout, route.ProxyNode)
 	if err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func (p *GeminiProvider) Embeddings(ctx context.Context, route Route, req openai
 			"parts": []map[string]any{{"text": stringifyContent(req.Input)}},
 		},
 	}
-	response, err := jsonRequest(ctx, http.MethodPost, p.endpoint(route.Model, "embedContent", route.ProviderKey.APIKey), body, nil, p.timeout, route.ProxyNode)
+	response, err := jsonRequest(ctx, http.MethodPost, p.endpoint(route.Model, "embedContent", route.Credential), body, nil, p.timeout, route.ProxyNode)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func (p *GeminiProvider) ImageGeneration(ctx context.Context, route Route, req o
 			"responseModalities": []string{"TEXT", "IMAGE"},
 		},
 	}
-	response, err := jsonRequest(ctx, http.MethodPost, p.endpoint(route.Model, "generateContent", route.ProviderKey.APIKey), body, nil, p.timeout, route.ProxyNode)
+	response, err := jsonRequest(ctx, http.MethodPost, p.endpoint(route.Model, "generateContent", route.Credential), body, nil, p.timeout, route.ProxyNode)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +197,7 @@ func (p *GeminiProvider) ImageGeneration(ctx context.Context, route Route, req o
 }
 
 func (p *GeminiProvider) ListModels(ctx context.Context, route Route) (*openai.ModelListResponse, error) {
-	endpoint := "https://generativelanguage.googleapis.com/v1beta/models?key=" + url.QueryEscape(route.ProviderKey.APIKey)
+	endpoint := "https://generativelanguage.googleapis.com/v1beta/models?key=" + url.QueryEscape(route.Credential)
 	response, err := jsonRequest(ctx, http.MethodGet, endpoint, nil, nil, p.timeout, route.ProxyNode)
 	if err != nil {
 		return nil, err

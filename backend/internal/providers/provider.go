@@ -20,6 +20,7 @@ type Route struct {
 	Model       string
 	ProviderKey models.ProviderKey
 	ProxyNode   *models.ProxyNode
+	Credential  string
 }
 
 type Provider interface {
@@ -44,6 +45,10 @@ func NewManager(items ...Provider) *Manager {
 }
 
 func (m *Manager) Get(name string) (Provider, bool) {
+	switch name {
+	case "openai-compatible", "local-llm", "deepseek", "mistral":
+		name = "openai"
+	}
 	p, ok := m.providers[name]
 	return p, ok
 }

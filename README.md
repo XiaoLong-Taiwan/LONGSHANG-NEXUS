@@ -19,6 +19,8 @@ The project intentionally excludes payment, recharge, token sales, balance, subs
 - Dockerized deployment with clearly separated frontend and backend services
 - Frontend panel can switch between multiple backend gateways without redeploying
 - Optional HTTPS for both frontend and backend
+- Built-in language library with English, Simplified Chinese, and Traditional Chinese
+- Upstream integrations support grouped keys, proxy assignment, model auto-detection, and OAuth-account token mode
 
 ## Project Structure
 
@@ -94,6 +96,7 @@ Default admin credentials come from `.env`:
 - Schema strategy: PostgreSQL is initialized from SQL files; GORM auto-migration is disabled by default to avoid constraint-name drift
 - Frontend transport: custom Next.js server with optional HTTPS and a built-in proxy route for backend selection
 - CORS strategy: in development, browser origins are allowed broadly; in production, set `CORS_ALLOW_ORIGINS` explicitly
+- UI localization: language library and runtime switcher for `en`, `zh-CN`, and `zh-TW`
 
 ## Main APIs
 
@@ -222,6 +225,8 @@ Core tables:
 - If frontend and backend are deployed together in Docker, keep `DEFAULT_BACKEND_INTERNAL_URL=http://api:18437` in `.env`.
 - To enable HTTPS, mount certificate files into `certs/frontend` or `certs/backend` and set `FRONTEND_TLS_ENABLED=true` or `TLS_ENABLED=true`.
 - If your panel is accessed from a domain or public IP in production, set `CORS_ALLOW_ORIGINS=https://your-frontend.example.com,http://your-ip:8080`.
+- Upstream integrations can use multiple API keys with `round_robin`, `priority_fill`, or `random` access mode.
+- OAuth accounts can be attached to an upstream integration in `oauth_account` mode so stored access tokens can be reused as upstream credentials where bearer-token access is supported.
 
 ## Troubleshooting
 

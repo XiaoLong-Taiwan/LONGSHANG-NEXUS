@@ -4,6 +4,7 @@ import DataTable from "../../components/DataTable";
 import Layout from "../../components/Layout";
 import PageHeader from "../../components/PageHeader";
 import { apiRequest, withAdminPath } from "../../lib/api";
+import { useI18n } from "../../lib/i18n";
 
 type ModelRecord = {
   id: string;
@@ -16,6 +17,7 @@ type ModelRecord = {
 };
 
 export default function ModelsPage() {
+  const { t } = useI18n();
   const [items, setItems] = useState<ModelRecord[]>([]);
 
   const load = () => apiRequest<ModelRecord[]>(withAdminPath("/models")).then(setItems);
@@ -27,18 +29,29 @@ export default function ModelsPage() {
   return (
     <Layout>
       <PageHeader
-        title="Model Registry"
-        description="Provider model catalog used for routing, sync status, and OpenAI-compatible model exposure."
+        title={t("models.title")}
+        description={t("models.description")}
         action={
-          <button
-            className="btn-primary"
-            onClick={async () => {
-              await apiRequest(withAdminPath("/models/sync"), "POST");
-              load();
-            }}
-          >
-            Sync models now
-          </button>
+          <div className="flex gap-3">
+            <button
+              className="btn-secondary"
+              onClick={async () => {
+                await apiRequest(withAdminPath("/provider-keys/detect-models"), "POST");
+                load();
+              }}
+            >
+              {t("models.detectAll")}
+            </button>
+            <button
+              className="btn-primary"
+              onClick={async () => {
+                await apiRequest(withAdminPath("/models/sync"), "POST");
+                load();
+              }}
+            >
+              {t("models.syncAll")}
+            </button>
+          </div>
         }
       />
 

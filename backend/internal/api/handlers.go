@@ -329,6 +329,25 @@ func (h *Handler) UpsertProviderKey(c *gin.Context) {
 	if payload.Priority == 0 {
 		payload.Priority = 100
 	}
+	if payload.Name == "" {
+		payload.Name = payload.Provider
+	}
+	if payload.AccessMode == "" {
+		payload.AccessMode = "round_robin"
+	}
+	if payload.AuthMode == "" {
+		payload.AuthMode = "api_key"
+	}
+	if len(payload.APIKeys) == 0 && payload.APIKey != "" {
+		serialized, _ := json.Marshal([]string{payload.APIKey})
+		payload.APIKeys = datatypes.JSON(serialized)
+	}
+	if len(payload.APIKeys) > 0 {
+		var items []string
+		if err := json.Unmarshal(payload.APIKeys, &items); err == nil && len(items) > 0 {
+			payload.APIKey = items[0]
+		}
+	}
 	if id := c.Param("id"); id != "" {
 		payload.ID = id
 	}
@@ -346,6 +365,22 @@ func (h *Handler) UpsertProviderKey(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, payload)
+}
+
+func (h *Handler) DetectProviderKeyModels(c *gin.Context) {
+	if err := h.modelSync.DetectIntegration(c.Request.Context(), c.Param("id")); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "detected", "integration_id": c.Param("id")})
+}
+
+func (h *Handler) DetectAllProviderKeyModels(c *gin.Context) {
+	if err := h.modelSync.DetectAllUpstreams(c.Request.Context()); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "detected"})
 }
 
 func (h *Handler) DeleteProviderKey(c *gin.Context) {

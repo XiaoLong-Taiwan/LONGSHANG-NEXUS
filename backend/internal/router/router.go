@@ -54,6 +54,8 @@ func Setup(cfg config.Config, db *gorm.DB, redis *redis.Client, handler *api.Han
 
 		admin.GET("/provider-keys", handler.ListProviderKeys)
 		admin.POST("/provider-keys", handler.UpsertProviderKey)
+		admin.POST("/provider-keys/detect-models", handler.DetectAllProviderKeyModels)
+		admin.POST("/provider-keys/:id/detect-models", handler.DetectProviderKeyModels)
 		admin.PUT("/provider-keys/:id", handler.UpsertProviderKey)
 		admin.DELETE("/provider-keys/:id", handler.DeleteProviderKey)
 

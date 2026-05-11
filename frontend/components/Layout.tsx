@@ -2,23 +2,25 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { PropsWithChildren, useEffect, useState } from "react";
 
+import LanguageSwitcher from "./LanguageSwitcher";
 import { clearToken, currentUser, getToken } from "../lib/api";
 import { getActiveConnection } from "../lib/connections";
-
-const navItems = [
-  { href: "/dashboard", label: "Overview" },
-  { href: "/dashboard/connections", label: "Connections" },
-  { href: "/dashboard/users", label: "Users" },
-  { href: "/dashboard/api-keys", label: "API Keys" },
-  { href: "/dashboard/provider-keys", label: "Provider Keys" },
-  { href: "/dashboard/proxies", label: "Proxy Nodes" },
-  { href: "/dashboard/models", label: "Models" },
-  { href: "/dashboard/usage", label: "Usage Logs" },
-];
+import { useI18n } from "../lib/i18n";
 
 export default function Layout({ children }: PropsWithChildren) {
   const router = useRouter();
   const [connectionName, setConnectionName] = useState("Backend");
+  const { t } = useI18n();
+  const navItems = [
+    { href: "/dashboard", label: t("nav.overview") },
+    { href: "/dashboard/connections", label: t("nav.connections") },
+    { href: "/dashboard/users", label: t("nav.users") },
+    { href: "/dashboard/api-keys", label: t("nav.apiKeys") },
+    { href: "/dashboard/provider-keys", label: t("nav.providerKeys") },
+    { href: "/dashboard/proxies", label: t("nav.proxies") },
+    { href: "/dashboard/models", label: t("nav.models") },
+    { href: "/dashboard/usage", label: t("nav.usage") },
+  ];
 
   useEffect(() => {
     if (!getToken()) {
@@ -44,11 +46,14 @@ export default function Layout({ children }: PropsWithChildren) {
       <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="panel overflow-hidden">
           <div className="bg-ink px-6 py-8 text-white">
-            <p className="text-xs uppercase tracking-[0.32em] text-white/60">AI Gateway</p>
+            <div className="flex items-start justify-between gap-4">
+              <p className="text-xs uppercase tracking-[0.32em] text-white/60">AI Gateway</p>
+              <LanguageSwitcher />
+            </div>
             <h1 className="mt-3 text-3xl font-semibold">Control Plane</h1>
             <p className="mt-3 text-sm text-white/70">OpenAI-compatible routing for OpenAI, Claude, Gemini, proxy pools, key rotation, and monitoring.</p>
             <div className="mt-5 rounded-2xl bg-white/10 px-4 py-3 text-sm text-white/85">
-              Connected backend: <span className="font-semibold">{connectionName}</span>
+              {t("layout.connectedBackend")}: <span className="font-semibold">{connectionName}</span>
             </div>
           </div>
           <nav className="space-y-2 p-4">
@@ -75,7 +80,7 @@ export default function Layout({ children }: PropsWithChildren) {
                 router.push("/");
               }}
             >
-              Sign out
+              {t("layout.signOut")}
             </button>
           </div>
         </aside>

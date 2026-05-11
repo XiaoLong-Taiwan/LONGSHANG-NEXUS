@@ -52,10 +52,10 @@ func (s *MonitoringService) Overview(ctx context.Context) (map[string]any, error
 
 	var proxyStats []map[string]any
 	if err := s.db.WithContext(ctx).Raw(`
-		SELECT COALESCE(proxy_id, 'direct') AS proxy_id, COUNT(*) AS requests, COALESCE(AVG(latency), 0) AS avg_latency
+		SELECT COALESCE(proxy_id::text, 'direct') AS proxy_id, COUNT(*) AS requests, COALESCE(AVG(latency), 0) AS avg_latency
 		FROM usage_logs
 		WHERE created_at >= ?
-		GROUP BY proxy_id
+		GROUP BY COALESCE(proxy_id::text, 'direct')
 		ORDER BY requests DESC
 	`, since).Scan(&proxyStats).Error; err != nil {
 		return nil, err

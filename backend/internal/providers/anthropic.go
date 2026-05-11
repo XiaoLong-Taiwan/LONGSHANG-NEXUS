@@ -25,7 +25,7 @@ func (p *AnthropicProvider) Name() string { return "anthropic" }
 func (p *AnthropicProvider) ChatCompletions(ctx context.Context, route Route, req openai.ChatCompletionRequest) (*openai.ChatCompletionResponse, error) {
 	body := p.toAnthropicRequest(req, false)
 	response, err := jsonRequest(ctx, http.MethodPost, "https://api.anthropic.com/v1/messages", body, map[string]string{
-		"x-api-key":         route.ProviderKey.APIKey,
+		"x-api-key":         route.Credential,
 		"anthropic-version": "2023-06-01",
 	}, p.timeout, route.ProxyNode)
 	if err != nil {
@@ -78,7 +78,7 @@ func (p *AnthropicProvider) ChatCompletions(ctx context.Context, route Route, re
 func (p *AnthropicProvider) StreamChatCompletions(ctx context.Context, route Route, req openai.ChatCompletionRequest, writer http.ResponseWriter) error {
 	body := p.toAnthropicRequest(req, true)
 	response, err := jsonRequest(ctx, http.MethodPost, "https://api.anthropic.com/v1/messages", body, map[string]string{
-		"x-api-key":         route.ProviderKey.APIKey,
+		"x-api-key":         route.Credential,
 		"anthropic-version": "2023-06-01",
 		"Accept":            "text/event-stream",
 	}, p.timeout, route.ProxyNode)
@@ -167,7 +167,7 @@ func (p *AnthropicProvider) ImageGeneration(context.Context, Route, openai.Image
 
 func (p *AnthropicProvider) ListModels(ctx context.Context, route Route) (*openai.ModelListResponse, error) {
 	response, err := jsonRequest(ctx, http.MethodGet, "https://api.anthropic.com/v1/models", nil, map[string]string{
-		"x-api-key":         route.ProviderKey.APIKey,
+		"x-api-key":         route.Credential,
 		"anthropic-version": "2023-06-01",
 	}, p.timeout, route.ProxyNode)
 	if err != nil {

@@ -25,7 +25,7 @@ func (p *OpenAIProvider) Name() string { return "openai" }
 
 func (p *OpenAIProvider) ChatCompletions(ctx context.Context, route Route, req openai.ChatCompletionRequest) (*openai.ChatCompletionResponse, error) {
 	response, err := jsonRequest(ctx, http.MethodPost, p.baseURL(route)+"/v1/chat/completions", req, map[string]string{
-		"Authorization": "Bearer " + route.ProviderKey.APIKey,
+		"Authorization": "Bearer " + route.Credential,
 	}, p.timeout, route.ProxyNode)
 	if err != nil {
 		return nil, err
@@ -38,7 +38,7 @@ func (p *OpenAIProvider) ChatCompletions(ctx context.Context, route Route, req o
 func (p *OpenAIProvider) StreamChatCompletions(ctx context.Context, route Route, req openai.ChatCompletionRequest, writer http.ResponseWriter) error {
 	req.Stream = true
 	response, err := jsonRequest(ctx, http.MethodPost, p.baseURL(route)+"/v1/chat/completions", req, map[string]string{
-		"Authorization": "Bearer " + route.ProviderKey.APIKey,
+		"Authorization": "Bearer " + route.Credential,
 		"Accept":        "text/event-stream",
 	}, p.timeout, route.ProxyNode)
 	if err != nil {
@@ -56,7 +56,7 @@ func (p *OpenAIProvider) StreamChatCompletions(ctx context.Context, route Route,
 
 func (p *OpenAIProvider) Embeddings(ctx context.Context, route Route, req openai.EmbeddingRequest) (*openai.EmbeddingResponse, error) {
 	response, err := jsonRequest(ctx, http.MethodPost, p.baseURL(route)+"/v1/embeddings", req, map[string]string{
-		"Authorization": "Bearer " + route.ProviderKey.APIKey,
+		"Authorization": "Bearer " + route.Credential,
 	}, p.timeout, route.ProxyNode)
 	if err != nil {
 		return nil, err
@@ -68,7 +68,7 @@ func (p *OpenAIProvider) Embeddings(ctx context.Context, route Route, req openai
 
 func (p *OpenAIProvider) ImageGeneration(ctx context.Context, route Route, req openai.ImageGenerationRequest) (*openai.ImageGenerationResponse, error) {
 	response, err := jsonRequest(ctx, http.MethodPost, p.baseURL(route)+"/v1/images/generations", req, map[string]string{
-		"Authorization": "Bearer " + route.ProviderKey.APIKey,
+		"Authorization": "Bearer " + route.Credential,
 	}, p.timeout, route.ProxyNode)
 	if err != nil {
 		return nil, err
@@ -80,7 +80,7 @@ func (p *OpenAIProvider) ImageGeneration(ctx context.Context, route Route, req o
 
 func (p *OpenAIProvider) ListModels(ctx context.Context, route Route) (*openai.ModelListResponse, error) {
 	response, err := jsonRequest(ctx, http.MethodGet, p.baseURL(route)+"/v1/models", nil, map[string]string{
-		"Authorization": "Bearer " + route.ProviderKey.APIKey,
+		"Authorization": "Bearer " + route.Credential,
 	}, p.timeout, route.ProxyNode)
 	if err != nil {
 		return nil, err

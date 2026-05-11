@@ -56,16 +56,23 @@ type ProxyNode struct {
 }
 
 type ProviderKey struct {
-	ID         string    `gorm:"primaryKey;size:36" json:"id"`
-	Provider   string    `gorm:"index;not null" json:"provider"`
-	APIKey     string    `gorm:"type:text;not null" json:"api_key"`
-	BaseURL    string    `json:"base_url"`
-	Priority   int       `gorm:"default:100" json:"priority"`
-	UsageCount int64     `gorm:"default:0" json:"usage_count"`
-	ProxyID    *string   `gorm:"index" json:"proxy_id"`
-	Status     string    `gorm:"index;default:active" json:"status"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID                   string         `gorm:"primaryKey;size:36" json:"id"`
+	Name                 string         `gorm:"not null;default:''" json:"name"`
+	Description          string         `gorm:"type:text;default:''" json:"description"`
+	Provider             string         `gorm:"index;not null" json:"provider"`
+	APIKey               string         `gorm:"type:text;not null" json:"api_key"`
+	APIKeys              datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"api_keys"`
+	AuthMode             string         `gorm:"not null;default:api_key" json:"auth_mode"`
+	OAuthAccountID       *string        `gorm:"index" json:"oauth_account_id"`
+	BaseURL              string         `json:"base_url"`
+	AccessMode           string         `gorm:"not null;default:round_robin" json:"access_mode"`
+	Priority             int            `gorm:"default:100" json:"priority"`
+	UsageCount           int64          `gorm:"default:0" json:"usage_count"`
+	ProxyID              *string        `gorm:"index" json:"proxy_id"`
+	Status               string         `gorm:"index;default:active" json:"status"`
+	ModelDetectionEnabled bool          `gorm:"default:true" json:"model_detection_enabled"`
+	CreatedAt            time.Time      `json:"created_at"`
+	UpdatedAt            time.Time      `json:"updated_at"`
 }
 
 type ModelRegistry struct {

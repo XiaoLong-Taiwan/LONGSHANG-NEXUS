@@ -1,11 +1,14 @@
 import { useRouter } from "next/router";
 import { FormEvent, useEffect, useState } from "react";
 
+import LanguageSwitcher from "../components/LanguageSwitcher";
 import { login, probeConnection, setToken } from "../lib/api";
 import { type BackendConnection, getActiveConnection, getLastEmail, loadConnections, setActiveConnection, setLastEmail, upsertConnection } from "../lib/connections";
+import { useI18n } from "../lib/i18n";
 
 export default function HomePage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [email, setEmail] = useState("admin@example.com");
   const [password, setPassword] = useState("admin123456");
   const [connections, setConnections] = useState<BackendConnection[]>([]);
@@ -35,7 +38,7 @@ export default function HomePage() {
     setEmail(getLastEmail());
     if (typeof router.query.error === "string") {
       if (router.query.error === "admin") {
-        setError("This account does not have admin console access.");
+        setError(t("login.noAdmin"));
       } else if (router.query.error === "session") {
         setError("Your previous session is no longer valid. Please sign in again.");
       }
@@ -50,7 +53,7 @@ export default function HomePage() {
       setLastEmail(email);
       const result = await login(email, password);
       if (result.user.role !== "admin") {
-        setError("This account can sign in, but it does not have admin console access.");
+        setError(t("login.noAdmin"));
         return;
       }
       setToken(result.token);
@@ -99,9 +102,12 @@ export default function HomePage() {
   return (
     <div className="mx-auto flex min-h-screen max-w-7xl flex-col justify-center gap-8 px-4 py-10 lg:grid lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
       <section className="space-y-6">
-        <span className="inline-flex rounded-full bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-slate-500 shadow-sm">
-          OpenAI-compatible AI Gateway
-        </span>
+        <div className="flex items-center justify-between gap-4">
+          <span className="inline-flex rounded-full bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-slate-500 shadow-sm">
+            {t("login.badge")}
+          </span>
+          <LanguageSwitcher />
+        </div>
         <h1 className="max-w-3xl text-5xl font-semibold leading-tight text-slate-950 md:text-6xl">
           One API surface for <span className="text-accent">OpenAI</span>, <span className="text-sea">Gemini</span>, and <span className="text-leaf">Claude</span>.
         </h1>
@@ -124,9 +130,9 @@ export default function HomePage() {
       <section className="panel p-8">
         <div className="mb-6">
           <p className="text-sm font-medium text-slate-500">Admin sign-in</p>
-          <h2 className="mt-2 text-3xl font-semibold text-slate-950">Gateway Console</h2>
+          <h2 className="mt-2 text-3xl font-semibold text-slate-950">{t("login.title")}</h2>
           <p className="mt-2 text-sm text-slate-500">
-            Choose a backend connection, verify reachability, then sign in with the admin or user account for that specific gateway node.
+            {t("login.subtitle")}
           </p>
         </div>
 
@@ -147,39 +153,39 @@ export default function HomePage() {
               </option>
             ))}
           </select>
-          <input className="field" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" />
-          <input className="field" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" type="password" />
+          <input className="field" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t("login.email")} />
+          <input className="field" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={t("login.password")} type="password" />
           {error ? <p className="text-sm text-danger">{error}</p> : null}
           <div className="grid gap-3 md:grid-cols-2">
             <button className="btn-secondary w-full" disabled={checking} onClick={handleCheckConnection} type="button">
-              {checking ? "Checking..." : "Test backend"}
+              {checking ? t("login.checking") : t("login.testBackend")}
             </button>
             <button className="btn-primary w-full" disabled={loading} type="submit">
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? t("login.signingIn") : t("login.signIn")}
             </button>
           </div>
         </form>
         <div className="mt-4">
           <button className="btn-secondary w-full" onClick={() => setShowConnectionForm((value) => !value)} type="button">
-            {showConnectionForm ? "Hide backend form" : "Add another backend"}
+            {showConnectionForm ? t("login.hideBackend") : t("login.addBackend")}
           </button>
         </div>
         {showConnectionForm ? (
           <form className="mt-4 grid gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4" onSubmit={handleSaveConnection}>
-            <input className="field" placeholder="Backend name" value={connectionForm.name} onChange={(event) => setConnectionForm({ ...connectionForm, name: event.target.value })} />
-            <input className="field" placeholder="Backend base URL" value={connectionForm.baseUrl} onChange={(event) => setConnectionForm({ ...connectionForm, baseUrl: event.target.value })} />
+            <input className="field" placeholder={t("login.backendName")} value={connectionForm.name} onChange={(event) => setConnectionForm({ ...connectionForm, name: event.target.value })} />
+            <input className="field" placeholder={t("login.backendBaseUrl")} value={connectionForm.baseUrl} onChange={(event) => setConnectionForm({ ...connectionForm, baseUrl: event.target.value })} />
             <label className="flex items-center gap-3 text-sm text-slate-700">
               <input type="checkbox" checked={connectionForm.allowInsecureTls} onChange={(event) => setConnectionForm({ ...connectionForm, allowInsecureTls: event.target.checked })} />
-              Allow self-signed HTTPS
+              {t("login.allowSelfSigned")}
             </label>
-            <button className="btn-primary" type="submit">Save backend</button>
+            <button className="btn-primary" type="submit">{t("login.saveBackend")}</button>
           </form>
         ) : null}
         <div className="mt-6 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 text-sm text-slate-600">
           <p>
-            Default development account: <span className="font-semibold text-slate-900">admin@example.com</span>
+            {t("login.defaultAdmin")}: <span className="font-semibold text-slate-900">admin@example.com</span>
           </p>
-          <p className="mt-2">Connection status: <span className="font-semibold text-slate-900">{connectionStatus}</span></p>
+          <p className="mt-2">{t("login.connectionStatus")}: <span className="font-semibold text-slate-900">{connectionStatus}</span></p>
           <p className="mt-2">
             Need another backend? After login, open the <span className="font-semibold text-slate-900">Connections</span> page to add or switch nodes.
           </p>
