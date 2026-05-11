@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"ai-gateway/backend/internal/auth"
 	"ai-gateway/backend/internal/config"
@@ -24,16 +25,22 @@ func Connect(cfg config.Config) (*Clients, error) {
 		return nil, fmt.Errorf("connect postgres: %w", err)
 	}
 
-	if err := database.AutoMigrate(
-		&models.User{},
-		&models.APIKey{},
-		&models.OAuthAccount{},
-		&models.ProxyNode{},
-		&models.ProviderKey{},
-		&models.ModelRegistry{},
-		&models.UsageLog{},
-	); err != nil {
-		return nil, fmt.Errorf("migrate database: %w", err)
+	if cfg.DBAutoMigrate {
+		if err := database.AutoMigrate(
+			&models.User{},
+			&models.APIKey{},
+			&models.OAuthAccount{},
+			&models.ProxyNode{},
+			&models.ProviderKey{},
+			&models.ModelRegistry{},
+			&models.UsageLog{},
+		); err != nil {
+			return nil, fmt.Errorf("migrate database: %w", err)
+		}
+	} else {
+		if err := verifySchema(database); err != nil {
+			return nil, err
+		}
 	}
 
 	redisOptions, err := redis.ParseURL(cfg.RedisURL)
@@ -50,6 +57,29 @@ func Connect(cfg config.Config) (*Clients, error) {
 	}
 
 	return &Clients{DB: database, Redis: redisClient}, nil
+}
+
+func verifySchema(database *gorm.DB) error {
+	requiredTables := []string{
+		"users",
+		"api_keys",
+		"oauth_accounts",
+		"proxy_nodes",
+		"provider_keys",
+		"model_registry",
+		"usage_logs",
+	}
+
+	missing := []string{}
+	for _, table := range requiredTables {
+		if !database.Migrator().HasTable(table) {
+			missing = append(missing, table)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("database schema is missing required tables: %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 func seedAdmin(database *gorm.DB, cfg config.Config) error {

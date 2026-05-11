@@ -59,6 +59,7 @@ cp .env.example .env
 ```
 
 2. Fill in provider keys, OAuth credentials, and JWT secret.
+   By default, `DB_AUTO_MIGRATE=false`, so the backend will use the SQL schema from `backend/migrations/001_init.sql` instead of mutating constraints at runtime.
 
 3. Start the full stack.
 
@@ -88,6 +89,7 @@ Default admin credentials come from `.env`:
 - Provider routing: model registry first, naming heuristics second
 - Fallback: next provider key, then next provider
 - Runtime health checks: nginx, frontend, and API all expose container health probes in Docker Compose
+- Schema strategy: PostgreSQL is initialized from SQL files; GORM auto-migration is disabled by default to avoid constraint-name drift
 
 ## Main APIs
 

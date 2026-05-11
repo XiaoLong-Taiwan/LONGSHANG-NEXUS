@@ -13,6 +13,7 @@ type Config struct {
 	AppEnv                string
 	Port                  string
 	DatabaseURL           string
+	DBAutoMigrate         bool
 	RedisURL              string
 	JWTSecret             string
 	FrontendURL           string
@@ -37,6 +38,7 @@ func Load() Config {
 		AppEnv:                getEnv("APP_ENV", "development"),
 		Port:                  getEnv("PORT", "8080"),
 		DatabaseURL:           getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ai_gateway?sslmode=disable"),
+		DBAutoMigrate:         getBool("DB_AUTO_MIGRATE", false),
 		RedisURL:              getEnv("REDIS_URL", "redis://localhost:6379/0"),
 		JWTSecret:             getEnv("JWT_SECRET", "change-me"),
 		FrontendURL:           getEnv("FRONTEND_URL", "http://localhost:8080"),
@@ -77,4 +79,16 @@ func getSeconds(key string, fallback int) time.Duration {
 		return time.Duration(fallback) * time.Second
 	}
 	return time.Duration(parsed) * time.Second
+}
+
+func getBool(key string, fallback bool) bool {
+	raw := getEnv(key, "")
+	if raw == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(raw)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
