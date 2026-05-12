@@ -32,7 +32,7 @@ func NewModelSyncService(db *gorm.DB, provider *providers.Manager, keyPool *Prov
 }
 
 func (s *ModelSyncService) SyncAll(ctx context.Context) error {
-	for _, provider := range []string{"openai", "anthropic", "gemini"} {
+	for _, provider := range []string{"openai", "openai-compatible", "local-llm", "deepseek", "mistral", "anthropic", "gemini"} {
 		_ = s.SyncProvider(ctx, provider)
 	}
 	return nil

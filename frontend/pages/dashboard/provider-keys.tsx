@@ -332,6 +332,7 @@ export default function ProviderKeysPage() {
             <label className="grid gap-2 lg:col-span-2">
               <span className="text-sm font-medium text-app">{t("provider.baseUrl")}</span>
               <input className="field" placeholder={currentPreset.baseUrl} value={form.base_url || ""} onChange={(event) => setForm({ ...form, base_url: event.target.value })} />
+              <span className="text-xs text-app-muted">{t("provider.baseUrlHelp")}</span>
             </label>
 
             {modalMode === "oauth" ? (
@@ -446,7 +447,7 @@ export default function ProviderKeysPage() {
           ) : null}
 
           <div className="flex justify-end gap-3">
-            <button className="btn-secondary" onClick={closeModal} type="button">{t("provider.cancel")}</button>
+            <button className="btn-secondary" onClick={closeModal} type="button">{t("common.cancel")}</button>
             <button className="btn-primary" disabled={saving} onClick={handleSave} type="button">
               {saving ? t("common.saving") : form.id ? t("provider.update") : t("provider.save")}
             </button>
@@ -511,8 +512,14 @@ function validateForm(form: ProviderIntegration, preset: ProviderPreset, t: (key
   if (form.auth_mode === "api_key" && form.api_keys.map((item) => item.trim()).filter(Boolean).length === 0) errors.push(t("provider.validationKey"));
   if (form.auth_mode === "oauth_account" && !form.oauth_account_id) errors.push(t("provider.validationOAuth"));
   if (preset.requiresBaseUrl && !(form.base_url || "").trim()) errors.push(t("provider.validationBaseUrl"));
+  if (looksLikeFrontendUrl(form.base_url || "")) errors.push(t("provider.validationBaseUrl"));
   if (Number.isNaN(form.priority) || form.priority < 0) errors.push(t("provider.validationPriority"));
   return errors;
+}
+
+function looksLikeFrontendUrl(value: string) {
+  const lower = value.trim().toLowerCase();
+  return lower.includes("/dashboard") || lower.includes("/_next") || lower.includes("/api/proxy");
 }
 
 function buildDiscoverPayload(form: ProviderIntegration) {

@@ -572,12 +572,20 @@ func (h *Handler) buildProviderRoute(ctx context.Context, payload providerDiscov
 		}
 	}
 
+	baseURL := defaultBaseURLForProvider(providerName, payload.BaseURL)
+	if providerRequiresBaseURL(providerName) && strings.TrimSpace(baseURL) == "" {
+		return providers.Route{}, fmt.Errorf("api base is required for openai-compatible and local-llm providers")
+	}
+	if looksLikeGatewayUIURL(baseURL) {
+		return providers.Route{}, fmt.Errorf("api base must point to an upstream API server, not the gateway frontend or admin page")
+	}
+
 	return providers.Route{
 		Provider: providerName,
 		Model:    strings.TrimSpace(payload.TestModel),
 		ProviderKey: models.ProviderKey{
 			Provider: providerName,
-			BaseURL:  defaultBaseURLForProvider(providerName, payload.BaseURL),
+			BaseURL:  baseURL,
 		},
 		ProxyNode:  proxyNode,
 		Credential: credential,

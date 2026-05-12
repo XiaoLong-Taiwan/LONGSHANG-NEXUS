@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,6 +33,16 @@ type Provider interface {
 	ListModels(ctx context.Context, route Route) (*openai.ModelListResponse, error)
 }
 
+type ProviderHTTPError struct {
+	Endpoint   string
+	StatusCode int
+	Body       string
+}
+
+func (e *ProviderHTTPError) Error() string {
+	return fmt.Sprintf("provider %s returned %d: %s", e.Endpoint, e.StatusCode, e.Body)
+}
+
 type Manager struct {
 	providers map[string]Provider
 }
@@ -54,13 +65,13 @@ func (m *Manager) Get(name string) (Provider, bool) {
 }
 
 func jsonRequest(ctx context.Context, method, endpoint string, body any, headers map[string]string, timeout time.Duration, proxyNode *models.ProxyNode) (*http.Response, error) {
-	var reader io.Reader
+	var payload []byte
+	var err error
 	if body != nil {
-		payload, err := json.Marshal(body)
+		payload, err = json.Marshal(body)
 		if err != nil {
 			return nil, err
 		}
-		reader = bytes.NewBuffer(payload)
 	}
 
 	client, err := proxy.NewHTTPClient(timeout, proxyNode)
@@ -68,27 +79,85 @@ func jsonRequest(ctx context.Context, method, endpoint string, body any, headers
 		return nil, err
 	}
 
-	request, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
-	if err != nil {
-		return nil, err
-	}
-	request.Header.Set("Content-Type", "application/json")
-	for key, value := range headers {
-		request.Header.Set(key, value)
-	}
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(time.Duration(attempt) * 350 * time.Millisecond):
+			}
+		}
 
-	response, err := client.Do(request)
-	if err != nil {
-		return nil, err
-	}
+		var reader io.Reader
+		if payload != nil {
+			reader = bytes.NewReader(payload)
+		}
+		request, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
+		if err != nil {
+			return nil, err
+		}
+		request.Header.Set("Content-Type", "application/json")
+		for key, value := range headers {
+			request.Header.Set(key, value)
+		}
 
-	if response.StatusCode >= 400 {
-		defer response.Body.Close()
+		response, err := client.Do(request)
+		if err != nil {
+			lastErr = err
+			if !isRetryableNetworkError(err) || attempt == 2 {
+				return nil, err
+			}
+			continue
+		}
+
+		if response.StatusCode < 400 {
+			return response, nil
+		}
+
 		body, _ := io.ReadAll(response.Body)
-		return nil, fmt.Errorf("provider %s returned %d: %s", endpoint, response.StatusCode, summarizeProviderError(response.Header.Get("Content-Type"), body))
+		_ = response.Body.Close()
+		lastErr = &ProviderHTTPError{
+			Endpoint:   endpoint,
+			StatusCode: response.StatusCode,
+			Body:       summarizeProviderError(response.Header.Get("Content-Type"), body),
+		}
+		if !isRetryableStatus(response.StatusCode) || attempt == 2 {
+			return nil, lastErr
+		}
 	}
 
-	return response, nil
+	return nil, lastErr
+}
+
+func shouldTryNextEndpoint(err error) bool {
+	var httpErr *ProviderHTTPError
+	if !errors.As(err, &httpErr) {
+		return false
+	}
+	return httpErr.StatusCode == http.StatusNotFound || httpErr.StatusCode == http.StatusMethodNotAllowed
+}
+
+func isRetryableStatus(status int) bool {
+	switch status {
+	case http.StatusRequestTimeout, http.StatusConflict, http.StatusTooEarly, http.StatusTooManyRequests,
+		http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+func isRetryableNetworkError(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "timeout") ||
+		strings.Contains(text, "connection reset") ||
+		strings.Contains(text, "connection refused") ||
+		strings.Contains(text, "temporary") ||
+		strings.Contains(text, "eof")
 }
 
 func copyJSONResponse[T any](response *http.Response, target *T) error {

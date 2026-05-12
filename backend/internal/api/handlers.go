@@ -388,6 +388,15 @@ func (h *Handler) UpsertProviderKey(c *gin.Context) {
 		normalizedKeys = nil
 		payload.APIKey = ""
 	}
+	baseURL := defaultBaseURLForProvider(strings.TrimSpace(payload.Provider), strings.TrimSpace(payload.BaseURL))
+	if providerRequiresBaseURL(payload.Provider) && strings.TrimSpace(baseURL) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "api base is required for openai-compatible and local-llm providers"})
+		return
+	}
+	if looksLikeGatewayUIURL(baseURL) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "api base must point to an upstream API server, not the gateway frontend or admin page"})
+		return
+	}
 
 	serializedKeys, _ := json.Marshal(normalizedKeys)
 	normalizedOverrides := normalizeStringList(payload.ModelOverrides)
@@ -400,7 +409,7 @@ func (h *Handler) UpsertProviderKey(c *gin.Context) {
 		APIKeys:               datatypes.JSON(serializedKeys),
 		AuthMode:              payload.AuthMode,
 		OAuthAccountID:        normalizeNullableString(payload.OAuthAccountID),
-		BaseURL:               defaultBaseURLForProvider(strings.TrimSpace(payload.Provider), strings.TrimSpace(payload.BaseURL)),
+		BaseURL:               baseURL,
 		AccessMode:            payload.AccessMode,
 		Priority:              priority,
 		ProxyID:               normalizeNullableString(payload.ProxyID),
@@ -639,7 +648,11 @@ func (h *Handler) Embeddings(c *gin.Context) {
 			continue
 		}
 		for _, route := range providerRoutes {
-			response, err := providerAdapter.Embeddings(c.Request.Context(), route, req)
+			upstreamReq := req
+			if route.Model != "" {
+				upstreamReq.Model = route.Model
+			}
+			response, err := providerAdapter.Embeddings(c.Request.Context(), route, upstreamReq)
 			if err != nil {
 				lastErr = err
 				continue
@@ -689,7 +702,11 @@ func (h *Handler) Images(c *gin.Context) {
 			continue
 		}
 		for _, route := range providerRoutes {
-			response, err := providerAdapter.ImageGeneration(c.Request.Context(), route, req)
+			upstreamReq := req
+			if route.Model != "" {
+				upstreamReq.Model = route.Model
+			}
+			response, err := providerAdapter.ImageGeneration(c.Request.Context(), route, upstreamReq)
 			if err != nil {
 				lastErr = err
 				continue
@@ -724,7 +741,11 @@ func (h *Handler) executeChat(ctx context.Context, req openai.ChatCompletionRequ
 		}
 
 		for _, route := range providerRoutes {
-			response, err := providerAdapter.ChatCompletions(ctx, route, req)
+			upstreamReq := req
+			if route.Model != "" {
+				upstreamReq.Model = route.Model
+			}
+			response, err := providerAdapter.ChatCompletions(ctx, route, upstreamReq)
 			if err == nil {
 				return response, route, nil
 			}
@@ -754,7 +775,11 @@ func (h *Handler) streamChatCompletions(c *gin.Context, apiKey models.APIKey, re
 			continue
 		}
 		for _, route := range providerRoutes {
-			if err := providerAdapter.StreamChatCompletions(c.Request.Context(), route, req, c.Writer); err == nil {
+			upstreamReq := req
+			if route.Model != "" {
+				upstreamReq.Model = route.Model
+			}
+			if err := providerAdapter.StreamChatCompletions(c.Request.Context(), route, upstreamReq, c.Writer); err == nil {
 				apiKeyID := apiKey.ID
 				h.keyPool.MarkUsage(c.Request.Context(), route.ProviderKey.ID)
 				h.usage.Log(c.Request.Context(), &apiKeyID, route.Provider, req.Model, route.ProviderKey.ProxyID, time.Since(start).Milliseconds(), openai.Usage{}, http.StatusOK, "")
@@ -900,5 +925,21 @@ func defaultBaseURLForProvider(providerName, baseURL string) string {
 		return "https://api.mistral.ai"
 	default:
 		return ""
+	}
+}
+
+func looksLikeGatewayUIURL(baseURL string) bool {
+	lower := strings.ToLower(strings.TrimSpace(baseURL))
+	return strings.Contains(lower, "/dashboard") ||
+		strings.Contains(lower, "/_next") ||
+		strings.Contains(lower, "/api/proxy")
+}
+
+func providerRequiresBaseURL(providerName string) bool {
+	switch strings.TrimSpace(providerName) {
+	case "openai-compatible", "local-llm":
+		return true
+	default:
+		return false
 	}
 }

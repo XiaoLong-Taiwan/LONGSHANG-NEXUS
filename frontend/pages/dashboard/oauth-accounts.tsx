@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import DataTable from "../../components/DataTable";
 import Layout from "../../components/Layout";
@@ -39,6 +39,18 @@ type OAuthPlatform = {
   notes: string;
 };
 
+type OAuthFlowState = {
+  client_id: string;
+  client_secret: string;
+  authorization_endpoint: string;
+  token_endpoint: string;
+  scopes: string;
+  redirect_uri: string;
+  callback_url: string;
+  code: string;
+  auth_url: string;
+};
+
 const providerOptions = ["codex", "anthropic", "antigravity", "gemini-cli", "kimi", "google", "github"];
 
 const emptyForm: OAuthAccount = {
@@ -57,6 +69,18 @@ const emptyForm: OAuthAccount = {
   proxy_id: "",
 };
 
+const emptyFlow: OAuthFlowState = {
+  client_id: "",
+  client_secret: "",
+  authorization_endpoint: "",
+  token_endpoint: "",
+  scopes: "",
+  redirect_uri: "",
+  callback_url: "",
+  code: "",
+  auth_url: "",
+};
+
 export default function OAuthAccountsPage() {
   const { t } = useI18n();
   const [items, setItems] = useState<OAuthAccount[]>([]);
@@ -65,17 +89,18 @@ export default function OAuthAccountsPage() {
   const [form, setForm] = useState<OAuthAccount>(emptyForm);
   const [open, setOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [flow, setFlow] = useState({
-    client_id: "",
-    client_secret: "",
-    authorization_endpoint: "",
-    token_endpoint: "",
-    scopes: "",
-    redirect_uri: "",
-    callback_url: "",
-    code: "",
-    auth_url: "",
-  });
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [flow, setFlow] = useState<OAuthFlowState>(emptyFlow);
+
+  const selectedPlatform = useMemo(
+    () => platforms.find((item) => item.provider === form.provider),
+    [form.provider, platforms]
+  );
+
+  const platformChoices = useMemo(() => {
+    const configured = platforms.map((item) => item.provider);
+    return Array.from(new Set([...configured, ...providerOptions]));
+  }, [platforms]);
 
   async function load() {
     const [accounts, userList, platformList] = await Promise.all([
@@ -86,9 +111,7 @@ export default function OAuthAccountsPage() {
     setItems(accounts);
     setUsers(userList);
     setPlatforms(platformList);
-    if (!form.user_id && userList[0]) {
-      setForm((current) => ({ ...current, user_id: userList[0].id }));
-    }
+    setForm((current) => ({ ...current, user_id: current.user_id || userList[0]?.id || "" }));
     if (platformList[0] && !flow.redirect_uri) {
       applyPlatform(platformList[0]);
     }
@@ -99,12 +122,15 @@ export default function OAuthAccountsPage() {
   }, []);
 
   async function handleSave() {
+    if (!form.name.trim() || !form.provider.trim() || !form.user_id.trim()) {
+      setFeedback(t("common.validation"));
+      return;
+    }
     const path = form.id ? withAdminPath(`/oauth-accounts/${form.id}`) : withAdminPath("/oauth-accounts");
     const method: "PUT" | "POST" = form.id ? "PUT" : "POST";
     await apiRequest(path, method, { ...form, proxy_id: form.proxy_id || null });
     setFeedback(t("oauth.saved"));
-    setOpen(false);
-    setForm(emptyForm);
+    closeModal();
     await load();
   }
 
@@ -119,7 +145,41 @@ export default function OAuthAccountsPage() {
     }));
   }
 
+  function openCreateModal() {
+    const firstPlatform = platforms.find((item) => item.provider === emptyForm.provider) || platforms[0];
+    const nextForm = { ...emptyForm, provider: firstPlatform?.provider || emptyForm.provider, user_id: users[0]?.id || "" };
+    setForm(nextForm);
+    setFlow(emptyFlow);
+    setShowAdvanced(false);
+    setOpen(true);
+    if (firstPlatform) {
+      applyPlatform(firstPlatform);
+    }
+  }
+
+  function openEditModal(item: OAuthAccount) {
+    setForm(item);
+    setFlow(emptyFlow);
+    setShowAdvanced(false);
+    setOpen(true);
+    const platform = platforms.find((entry) => entry.provider === item.provider);
+    if (platform) {
+      applyPlatform(platform);
+    }
+  }
+
+  function closeModal() {
+    setOpen(false);
+    setForm({ ...emptyForm, user_id: users[0]?.id || "" });
+    setFlow(emptyFlow);
+    setShowAdvanced(false);
+  }
+
   async function handleGenerateLink() {
+    if (!form.name.trim()) {
+      setFeedback(t("common.validation"));
+      return;
+    }
     const result = await apiRequest<{ auth_url?: string; redirect_uri: string; state: string; manual?: boolean; message?: string }>(
       withAdminPath("/oauth-flows/start"),
       "POST",
@@ -144,18 +204,23 @@ export default function OAuthAccountsPage() {
     const code = parsed.get("code") || "";
     const accessToken = parsed.get("access_token") || "";
     const refreshToken = parsed.get("refresh_token") || "";
+    const state = parsed.get("state") || "";
     setFlow((current) => ({ ...current, code: code || current.code }));
     setForm((current) => ({
       ...current,
       access_token: accessToken || current.access_token,
       refresh_token: refreshToken || current.refresh_token,
-      provider_account_id: parsed.get("state") || current.provider_account_id,
-      notes: code && !accessToken ? `${current.notes ? `${current.notes}\n` : ""}authorization_code=${code}` : current.notes,
+      provider_account_id: state || current.provider_account_id,
+      notes: code && !accessToken ? appendNote(current.notes, `authorization_code=${code}`) : current.notes,
     }));
     setFeedback(accessToken ? t("oauth.tokenCaptured") : t("oauth.codeCaptured"));
   }
 
   async function handleExchangeCode() {
+    if (!flow.code.trim()) {
+      setFeedback(t("common.validation"));
+      return;
+    }
     const result = await apiRequest<Record<string, string>>(withAdminPath("/oauth-flows/exchange"), "POST", {
       provider: form.provider,
       code: flow.code,
@@ -177,7 +242,7 @@ export default function OAuthAccountsPage() {
       <PageHeader
         title={t("oauth.title")}
         description={t("oauth.description")}
-        action={<button className="btn-primary" onClick={() => setOpen(true)} type="button">{t("oauth.add")}</button>}
+        action={<button className="btn-primary" onClick={openCreateModal} type="button">{t("oauth.add")}</button>}
       />
 
       {feedback ? <div className="alert-info">{feedback}</div> : null}
@@ -192,7 +257,7 @@ export default function OAuthAccountsPage() {
           `${item.quota_used}/${item.quota_total || 0} ${item.quota_unit || ""}`,
           item.status,
           <div key={item.id} className="flex flex-wrap gap-3">
-            <button className="text-app-muted" onClick={() => { setForm(item); setOpen(true); }} type="button">{t("common.edit")}</button>
+            <button className="text-app-muted" onClick={() => openEditModal(item)} type="button">{t("common.edit")}</button>
             <button
               className="text-app-muted"
               onClick={async () => {
@@ -220,66 +285,76 @@ export default function OAuthAccountsPage() {
 
       <Modal
         closeLabel={t("common.close")}
-        description={t("oauth.description")}
+        description={t("oauth.flowDescription")}
         open={open}
-        onClose={() => { setOpen(false); setForm(emptyForm); }}
+        onClose={closeModal}
         title={form.id ? t("oauth.modalEdit") : t("oauth.modalCreate")}
       >
-        <div className="grid gap-4 lg:grid-cols-2">
-          <label className="grid gap-2">
-            <span className="text-sm font-medium text-app">{t("oauth.name")}</span>
-            <input className="field" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-          </label>
-          <label className="grid gap-2">
-            <span className="text-sm font-medium text-app">{t("oauth.provider")}</span>
-            <select
-              className="field"
-              value={form.provider}
-              onChange={(event) => {
-                const provider = event.target.value;
-                setForm({ ...form, provider });
-                const platform = platforms.find((item) => item.provider === provider);
-                if (platform) {
-                  applyPlatform(platform);
-                }
-              }}
-            >
-              {providerOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
-          <div className="panel lg:col-span-2 p-4">
+        <div className="grid gap-5">
+          <section className="panel p-4">
             <h3 className="text-base font-semibold text-app">{t("oauth.flowTitle")}</h3>
-            <p className="mt-1 text-sm text-app-muted">{t("oauth.flowDescription")}</p>
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <label className="grid gap-2">
+                <span className="text-sm font-medium text-app">{t("oauth.stepName")}</span>
+                <input className="field" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm font-medium text-app">{t("oauth.provider")}</span>
+                <select
+                  className="field"
+                  value={form.provider}
+                  onChange={(event) => {
+                    const provider = event.target.value;
+                    setForm({ ...form, provider });
+                    const platform = platforms.find((item) => item.provider === provider);
+                    if (platform) {
+                      applyPlatform(platform);
+                    }
+                  }}
+                >
+                  {platformChoices.map((item) => {
+                    const platform = platforms.find((entry) => entry.provider === item);
+                    return <option key={item} value={item}>{platform?.label || item}</option>;
+                  })}
+                </select>
+              </label>
+              {selectedPlatform?.notes ? (
+                <div className="rounded-[15px] border border-app bg-app-soft p-3 text-sm text-app-muted lg:col-span-2">
+                  <span className="font-medium text-app">{t("oauth.platformNotes")}:</span> {selectedPlatform.notes}
+                </div>
+              ) : null}
+              <label className="grid gap-2 lg:col-span-2">
+                <span className="text-sm font-medium text-app">{t("oauth.stepRedirect")}</span>
+                <p className="text-xs text-app-muted">{t("oauth.copyRedirectFirst")}</p>
+                <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                  <input className="field" value={flow.redirect_uri} onChange={(event) => setFlow({ ...flow, redirect_uri: event.target.value })} />
+                  <button
+                    className="btn-secondary"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(flow.redirect_uri);
+                      setFeedback(t("common.copied"));
+                    }}
+                    type="button"
+                  >
+                    {t("common.copy")}
+                  </button>
+                </div>
+              </label>
               <label className="grid gap-2">
                 <span className="text-sm font-medium text-app">{t("oauth.clientId")}</span>
                 <input className="field" value={flow.client_id} onChange={(event) => setFlow({ ...flow, client_id: event.target.value })} />
               </label>
               <label className="grid gap-2">
-                <span className="text-sm font-medium text-app">{t("oauth.clientSecret")}</span>
-                <input className="field" type="password" value={flow.client_secret} onChange={(event) => setFlow({ ...flow, client_secret: event.target.value })} />
-              </label>
-              <label className="grid gap-2">
-                <span className="text-sm font-medium text-app">{t("oauth.authorizationEndpoint")}</span>
-                <input className="field" value={flow.authorization_endpoint} onChange={(event) => setFlow({ ...flow, authorization_endpoint: event.target.value })} />
-              </label>
-              <label className="grid gap-2">
-                <span className="text-sm font-medium text-app">{t("oauth.tokenEndpoint")}</span>
-                <input className="field" value={flow.token_endpoint} onChange={(event) => setFlow({ ...flow, token_endpoint: event.target.value })} />
-              </label>
-              <label className="grid gap-2 lg:col-span-2">
                 <span className="text-sm font-medium text-app">{t("oauth.scopes")}</span>
                 <input className="field" value={flow.scopes} onChange={(event) => setFlow({ ...flow, scopes: event.target.value })} />
               </label>
-              <label className="grid gap-2 lg:col-span-2">
-                <span className="text-sm font-medium text-app">{t("oauth.redirectUri")}</span>
-                <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                  <input className="field" value={flow.redirect_uri} onChange={(event) => setFlow({ ...flow, redirect_uri: event.target.value })} />
-                  <button className="btn-secondary" onClick={() => navigator.clipboard?.writeText(flow.redirect_uri)} type="button">{t("common.copy")}</button>
-                </div>
-              </label>
               <div className="grid gap-2 lg:col-span-2">
-                <button className="btn-secondary" onClick={handleGenerateLink} type="button">{t("oauth.generateLink")}</button>
+                <span className="text-sm font-medium text-app">{t("oauth.stepAuthorize")}</span>
+                <p className="text-xs text-app-muted">{t("oauth.authLinkHelp")}</p>
+                <div className="flex flex-wrap gap-3">
+                  <button className="btn-secondary" onClick={handleGenerateLink} type="button">{t("oauth.generateLink")}</button>
+                  {flow.auth_url ? <a className="btn-primary" href={flow.auth_url} target="_blank" rel="noreferrer">{t("oauth.openAuthUrl")}</a> : null}
+                </div>
                 {flow.auth_url ? (
                   <div className="rounded-[15px] border border-app p-3">
                     <p className="text-sm font-medium text-app">{t("oauth.authUrl")}</p>
@@ -288,7 +363,7 @@ export default function OAuthAccountsPage() {
                 ) : null}
               </div>
               <label className="grid gap-2 lg:col-span-2">
-                <span className="text-sm font-medium text-app">{t("oauth.callbackUrl")}</span>
+                <span className="text-sm font-medium text-app">{t("oauth.stepCapture")}</span>
                 <textarea className="field min-h-20" value={flow.callback_url} onChange={(event) => setFlow({ ...flow, callback_url: event.target.value })} />
               </label>
               <div className="flex flex-wrap gap-3 lg:col-span-2">
@@ -296,55 +371,73 @@ export default function OAuthAccountsPage() {
                 <button className="btn-secondary" onClick={handleExchangeCode} type="button">{t("oauth.exchangeCode")}</button>
               </div>
             </div>
-          </div>
-          <label className="grid gap-2">
-            <span className="text-sm font-medium text-app">{t("oauth.email")}</span>
-            <input className="field" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
-          </label>
-          <label className="grid gap-2">
-            <span className="text-sm font-medium text-app">{t("oauth.accountId")}</span>
-            <input className="field" value={form.provider_account_id} onChange={(event) => setForm({ ...form, provider_account_id: event.target.value })} />
-          </label>
-          <label className="grid gap-2">
-            <span className="text-sm font-medium text-app">{t("oauth.user")}</span>
-            <select className="field" value={form.user_id} onChange={(event) => setForm({ ...form, user_id: event.target.value })}>
-              {users.map((item) => <option key={item.id} value={item.id}>{item.email}</option>)}
-            </select>
-          </label>
-          <label className="grid gap-2">
-            <span className="text-sm font-medium text-app">{t("oauth.status")}</span>
-            <select className="field" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
-              <option value="active">active</option>
-              <option value="disabled">disabled</option>
-            </select>
-          </label>
-          <label className="grid gap-2 lg:col-span-2">
-            <span className="text-sm font-medium text-app">{t("oauth.accessToken")}</span>
-            <textarea className="field min-h-24" value={form.access_token} onChange={(event) => setForm({ ...form, access_token: event.target.value })} />
-          </label>
-          <label className="grid gap-2 lg:col-span-2">
-            <span className="text-sm font-medium text-app">{t("oauth.refreshToken")}</span>
-            <textarea className="field min-h-20" value={form.refresh_token} onChange={(event) => setForm({ ...form, refresh_token: event.target.value })} />
-          </label>
-          <label className="grid gap-2">
-            <span className="text-sm font-medium text-app">{t("oauth.quotaUsed")}</span>
-            <input className="field" type="number" value={form.quota_used} onChange={(event) => setForm({ ...form, quota_used: Number(event.target.value) })} />
-          </label>
-          <label className="grid gap-2">
-            <span className="text-sm font-medium text-app">{t("oauth.quotaTotal")}</span>
-            <input className="field" type="number" value={form.quota_total} onChange={(event) => setForm({ ...form, quota_total: Number(event.target.value) })} />
-          </label>
-          <label className="grid gap-2">
-            <span className="text-sm font-medium text-app">{t("oauth.quotaUnit")}</span>
-            <input className="field" value={form.quota_unit} onChange={(event) => setForm({ ...form, quota_unit: event.target.value })} />
-          </label>
-          <label className="grid gap-2 lg:col-span-2">
-            <span className="text-sm font-medium text-app">{t("oauth.notes")}</span>
-            <textarea className="field min-h-24" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
-          </label>
+          </section>
+
+          <details className="panel p-4" open={showAdvanced} onToggle={(event) => setShowAdvanced(event.currentTarget.open)}>
+            <summary className="cursor-pointer text-base font-semibold text-app">{t("common.advanced")}</summary>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <label className="grid gap-2">
+                <span className="text-sm font-medium text-app">{t("oauth.authorizationEndpoint")}</span>
+                <input className="field" value={flow.authorization_endpoint} onChange={(event) => setFlow({ ...flow, authorization_endpoint: event.target.value })} />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm font-medium text-app">{t("oauth.tokenEndpoint")}</span>
+                <input className="field" value={flow.token_endpoint} onChange={(event) => setFlow({ ...flow, token_endpoint: event.target.value })} />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm font-medium text-app">{t("oauth.clientSecret")}</span>
+                <input className="field" type="password" value={flow.client_secret} onChange={(event) => setFlow({ ...flow, client_secret: event.target.value })} />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm font-medium text-app">{t("oauth.user")}</span>
+                <select className="field" value={form.user_id} onChange={(event) => setForm({ ...form, user_id: event.target.value })}>
+                  {users.map((item) => <option key={item.id} value={item.id}>{item.email}</option>)}
+                </select>
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm font-medium text-app">{t("oauth.email")}</span>
+                <input className="field" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm font-medium text-app">{t("oauth.accountId")}</span>
+                <input className="field" value={form.provider_account_id} onChange={(event) => setForm({ ...form, provider_account_id: event.target.value })} />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm font-medium text-app">{t("oauth.status")}</span>
+                <select className="field" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
+                  <option value="active">active</option>
+                  <option value="disabled">disabled</option>
+                </select>
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm font-medium text-app">{t("oauth.quotaUnit")}</span>
+                <input className="field" value={form.quota_unit} onChange={(event) => setForm({ ...form, quota_unit: event.target.value })} />
+              </label>
+              <label className="grid gap-2 lg:col-span-2">
+                <span className="text-sm font-medium text-app">{t("oauth.accessToken")}</span>
+                <textarea className="field min-h-24" value={form.access_token} onChange={(event) => setForm({ ...form, access_token: event.target.value })} />
+              </label>
+              <label className="grid gap-2 lg:col-span-2">
+                <span className="text-sm font-medium text-app">{t("oauth.refreshToken")}</span>
+                <textarea className="field min-h-20" value={form.refresh_token} onChange={(event) => setForm({ ...form, refresh_token: event.target.value })} />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm font-medium text-app">{t("oauth.quotaUsed")}</span>
+                <input className="field" type="number" value={form.quota_used} onChange={(event) => setForm({ ...form, quota_used: Number(event.target.value) })} />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm font-medium text-app">{t("oauth.quotaTotal")}</span>
+                <input className="field" type="number" value={form.quota_total} onChange={(event) => setForm({ ...form, quota_total: Number(event.target.value) })} />
+              </label>
+              <label className="grid gap-2 lg:col-span-2">
+                <span className="text-sm font-medium text-app">{t("oauth.notes")}</span>
+                <textarea className="field min-h-24" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+              </label>
+            </div>
+          </details>
         </div>
         <div className="mt-6 flex justify-end gap-3">
-          <button className="btn-secondary" onClick={() => { setOpen(false); setForm(emptyForm); }} type="button">{t("common.cancel")}</button>
+          <button className="btn-secondary" onClick={closeModal} type="button">{t("common.cancel")}</button>
           <button className="btn-primary" onClick={handleSave} type="button">{t("common.save")}</button>
         </div>
       </Modal>
@@ -352,16 +445,43 @@ export default function OAuthAccountsPage() {
   );
 }
 
+function appendNote(current: string, next: string) {
+  if (!next || current.includes(next)) {
+    return current;
+  }
+  return current ? `${current}\n${next}` : next;
+}
+
 function parseOAuthCallback(raw: string) {
+  const value = raw.trim();
+  if (!value) {
+    return null;
+  }
   try {
-    const url = new URL(raw.trim());
+    const json = JSON.parse(value) as { params?: Record<string, string>; provider?: string };
+    if (json.params) {
+      const params = new URLSearchParams();
+      Object.entries(json.params).forEach(([key, item]) => params.set(key, item));
+      if (json.provider) {
+        params.set("provider", json.provider);
+      }
+      return params;
+    }
+  } catch {
+    // Not JSON; continue parsing as URL or raw code.
+  }
+  try {
+    const url = new URL(value);
     const params = new URLSearchParams(url.search);
     if (url.hash) {
       const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
-      hash.forEach((value, key) => params.set(key, value));
+      hash.forEach((item, key) => params.set(key, item));
     }
     return params;
   } catch {
+    if (/^[A-Za-z0-9._~+/=-]{12,}$/.test(value)) {
+      return new URLSearchParams({ code: value });
+    }
     return null;
   }
 }

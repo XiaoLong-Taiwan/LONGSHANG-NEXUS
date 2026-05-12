@@ -7,6 +7,7 @@ The project intentionally excludes payment, recharge, token sales, balance, subs
 ## Features
 
 - OpenAI-compatible API surface: `/v1/chat/completions`, `/v1/embeddings`, `/v1/images/generations`, `/v1/models`
+- Frontend port `8080` also proxies OpenAI-compatible `/v1/*` requests to the selected backend, useful when clients only expose one base URL setting
 - Provider adapters for OpenAI, Gemini, and Claude with provider fallback
 - API key management with rotate, disable, delete, per-key rate limit, and allowed-model policy
 - Multi-user system with `admin` and `user` roles
@@ -77,7 +78,7 @@ Services after boot:
 - Frontend panel: `http://localhost:8080`
 - Backend API: `http://localhost:18437`
 
-When both run inside Docker Compose, the frontend server proxies backend requests using Docker internal networking. In the browser, you only visit the frontend port.
+When both run inside Docker Compose, the frontend server proxies backend requests using Docker internal networking. In the browser, you only visit the frontend port. For API clients, either `http://localhost:18437/v1` or `http://localhost:8080/v1` can be used.
 
 Default admin credentials come from `.env`:
 
@@ -204,6 +205,15 @@ const completion = await client.chat.completions.create({
 console.log(completion.choices[0].message.content);
 ```
 
+If your tool is already pointed at the frontend port, this is also supported:
+
+```javascript
+const client = new OpenAI({
+  apiKey: process.env.GATEWAY_API_KEY,
+  baseURL: "http://localhost:8080/v1",
+});
+```
+
 ## Database Schema
 
 The initial PostgreSQL schema is in [backend/migrations/001_init.sql](/d:/DEV%20PROJET/ai-gateway/backend/migrations/001_init.sql).
@@ -227,7 +237,9 @@ Core tables:
 - API key `rate_limit=0` means unlimited requests per minute. Empty `allowed_models` or `*` means all models are allowed; values like `gpt-*` can be used as prefix allow rules.
 - The homepage now uses a direct local login flow and does not show third-party sign-in buttons.
 - The frontend panel stores multiple backend connection profiles in browser local storage and proxies requests through its own `/api/proxy/*` route.
+- The frontend also rewrites `/v1/*`, `/api/v1/*`, `/models`, `/chat/completions`, `/embeddings`, and `/images/generations` into the same proxy, so OpenAI SDK clients do not receive Next.js 404 pages when using port `8080`.
 - If frontend and backend are deployed together in Docker, keep `DEFAULT_BACKEND_INTERNAL_URL=http://api:18437` in `.env`.
+- `PROXY_TIMEOUT_MS` controls frontend proxy timeout for long-running requests and streaming.
 - To enable HTTPS, mount certificate files into `certs/frontend` or `certs/backend` and set `FRONTEND_TLS_ENABLED=true` or `TLS_ENABLED=true`.
 - If your panel is accessed from a domain or public IP in production, set `CORS_ALLOW_ORIGINS=https://your-frontend.example.com,http://your-ip:8080`.
 - Upstream integrations can use multiple API keys with `round_robin`, `priority_fill`, or `random` access mode.
@@ -254,4 +266,3 @@ Expected healthy path through the stack:
 
 - Gemini image generation uses the Gemini multimodal generate-content flow and expects image-capable Gemini models.
 - Anthropic embeddings are not exposed because Anthropic does not currently offer an equivalent embeddings API in this gateway.
-- The current environment did not include local Go or Node toolchains, so the code was prepared statically and not compiled in-place here.

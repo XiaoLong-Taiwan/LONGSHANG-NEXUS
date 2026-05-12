@@ -36,9 +36,21 @@ func (m *ModelRouter) Resolve(ctx context.Context, model string) ([]ModelRoute, 
 		for _, item := range registry {
 			routes = append(routes, ModelRoute{Provider: item.Provider, Model: item.ModelName})
 		}
+		for _, fallback := range inferRoutes(model) {
+			routes = appendRouteIfMissing(routes, fallback)
+		}
 		return routes, nil
 	}
 	return inferRoutes(model), nil
+}
+
+func appendRouteIfMissing(routes []ModelRoute, candidate ModelRoute) []ModelRoute {
+	for _, route := range routes {
+		if route.Provider == candidate.Provider && route.Model == candidate.Model {
+			return routes
+		}
+	}
+	return append(routes, candidate)
 }
 
 func inferRoutes(model string) []ModelRoute {
@@ -51,12 +63,16 @@ func inferRoutes(model string) []ModelRoute {
 	case strings.HasPrefix(lower, "gemini"), strings.Contains(lower, "imagen"):
 		return []ModelRoute{{Provider: "gemini", Model: model}}
 	case strings.HasPrefix(lower, "deepseek"):
-		return []ModelRoute{{Provider: "openai", Model: model}}
+		return []ModelRoute{{Provider: "deepseek", Model: model}}
 	case strings.HasPrefix(lower, "mistral"):
-		return []ModelRoute{{Provider: "openai", Model: model}}
+		return []ModelRoute{{Provider: "mistral", Model: model}}
 	default:
 		return []ModelRoute{
 			{Provider: "openai", Model: model},
+			{Provider: "openai-compatible", Model: model},
+			{Provider: "local-llm", Model: model},
+			{Provider: "deepseek", Model: model},
+			{Provider: "mistral", Model: model},
 			{Provider: "anthropic", Model: model},
 			{Provider: "gemini", Model: model},
 		}

@@ -96,6 +96,24 @@ func Setup(cfg config.Config, db *gorm.DB, redis *redis.Client, handler *api.Han
 		v1.POST("/images/generations", handler.Images)
 	}
 
+	apiV1 := engine.Group("/api/v1")
+	apiV1.Use(middleware.APIKeyAuth(db), middleware.RateLimit(redis))
+	{
+		apiV1.GET("/models", handler.OpenAIModels)
+		apiV1.POST("/chat/completions", handler.ChatCompletions)
+		apiV1.POST("/embeddings", handler.Embeddings)
+		apiV1.POST("/images/generations", handler.Images)
+	}
+
+	openAICompat := engine.Group("/")
+	openAICompat.Use(middleware.APIKeyAuth(db), middleware.RateLimit(redis))
+	{
+		openAICompat.GET("/models", handler.OpenAIModels)
+		openAICompat.POST("/chat/completions", handler.ChatCompletions)
+		openAICompat.POST("/embeddings", handler.Embeddings)
+		openAICompat.POST("/images/generations", handler.Images)
+	}
+
 	return engine
 }
 
