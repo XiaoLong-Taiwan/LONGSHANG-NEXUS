@@ -45,7 +45,8 @@ func RateLimit(redisClient *redis.Client) gin.HandlerFunc {
 		apiKey := value.(models.APIKey)
 		limit := apiKey.RateLimit
 		if limit <= 0 {
-			limit = 60
+			c.Next()
+			return
 		}
 
 		key := "ratelimit:" + apiKey.ID + ":" + time.Now().UTC().Format("200601021504")

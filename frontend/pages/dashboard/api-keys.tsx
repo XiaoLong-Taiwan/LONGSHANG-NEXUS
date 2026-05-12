@@ -27,7 +27,7 @@ export default function APIKeysPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [rawKey, setRawKey] = useState("");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ user_id: "", rate_limit: 120, allowed_models: "gpt-4o-mini,claude-3-5-sonnet-latest" });
+  const [form, setForm] = useState({ user_id: "", rate_limit: 0, allowed_models: "" });
 
   async function load() {
     const [apiKeys, userList] = await Promise.all([
@@ -66,7 +66,7 @@ export default function APIKeysPage() {
         rows={items.map((item) => [
           <code key={item.id}>{item.key_preview}</code>,
           item.user_id,
-          `${item.rate_limit || 60}/min`,
+          item.rate_limit > 0 ? `${item.rate_limit}/min` : t("common.unlimited"),
           item.status,
           new Date(item.created_at).toLocaleString(),
           <div key={`actions-${item.id}`} className="flex gap-3">

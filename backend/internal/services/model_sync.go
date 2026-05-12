@@ -108,20 +108,22 @@ func (s *ModelSyncService) SyncProvider(ctx context.Context, providerName string
 			Capabilities: datatypes.JSON([]byte(`{"source":"sync","sources":[]}`)),
 		}
 
-		var existing models.ModelRegistry
-		err := s.db.WithContext(ctx).
-			Where("provider = ? AND model_name = ?", providerName, item.ID).
-			First(&existing).Error
-		if err == nil {
+		existing, found, err := s.findModel(ctx, providerName, item.ID)
+		if err != nil {
+			return err
+		}
+		if found {
 			existing.LastChecked = time.Now()
 			existing.Status = "active"
 			existing.Type = record.Type
 			existing.Capabilities = mergeCapabilities(existing.Capabilities, providerModelSource{})
-			_ = s.db.WithContext(ctx).Save(&existing).Error
+			if err := s.db.WithContext(ctx).Save(&existing).Error; err != nil {
+				return err
+			}
 			continue
 		}
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			_ = s.db.WithContext(ctx).Create(&record).Error
+		if err := s.db.WithContext(ctx).Create(&record).Error; err != nil {
+			return err
 		}
 	}
 	return nil
@@ -142,9 +144,11 @@ func (s *ModelSyncService) SyncIntegrationModels(ctx context.Context, integratio
 		}
 		desired[modelName] = struct{}{}
 
-		var existing models.ModelRegistry
-		err := s.db.WithContext(ctx).Where("provider = ? AND model_name = ?", integration.Provider, modelName).First(&existing).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		existing, found, err := s.findModel(ctx, integration.Provider, modelName)
+		if err != nil {
+			return err
+		}
+		if !found {
 			payload := mergeCapabilities(nil, source)
 			record := models.ModelRegistry{
 				Provider:     integration.Provider,
@@ -159,9 +163,6 @@ func (s *ModelSyncService) SyncIntegrationModels(ctx context.Context, integratio
 				return createErr
 			}
 			continue
-		}
-		if err != nil {
-			return err
 		}
 		existing.Priority = integration.Priority
 		existing.Status = "active"
@@ -200,6 +201,18 @@ func (s *ModelSyncService) SyncIntegrationModels(ctx context.Context, integratio
 		}
 	}
 	return nil
+}
+
+func (s *ModelSyncService) findModel(ctx context.Context, providerName, modelName string) (models.ModelRegistry, bool, error) {
+	var existing models.ModelRegistry
+	result := s.db.WithContext(ctx).
+		Where("provider = ? AND model_name = ?", providerName, modelName).
+		Limit(1).
+		Find(&existing)
+	if result.Error != nil {
+		return models.ModelRegistry{}, false, result.Error
+	}
+	return existing, result.RowsAffected > 0, nil
 }
 
 type providerModelCapabilities struct {

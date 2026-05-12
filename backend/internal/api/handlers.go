@@ -775,8 +775,16 @@ func (h *Handler) isModelAllowed(apiKey models.APIKey, model string) bool {
 	if err := json.Unmarshal(apiKey.AllowedModels, &items); err != nil || len(items) == 0 {
 		return true
 	}
+	model = strings.TrimSpace(model)
 	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" || item == "*" {
+			return true
+		}
 		if item == model {
+			return true
+		}
+		if strings.HasSuffix(item, "*") && strings.HasPrefix(model, strings.TrimSuffix(item, "*")) {
 			return true
 		}
 	}

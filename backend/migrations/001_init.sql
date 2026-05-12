@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
   key TEXT NOT NULL,
   key_preview TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active',
-  rate_limit INTEGER NOT NULL DEFAULT 60,
+  rate_limit INTEGER NOT NULL DEFAULT 0,
   allowed_models JSONB NOT NULL DEFAULT '[]'::jsonb,
   proxy_id UUID REFERENCES proxy_nodes(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

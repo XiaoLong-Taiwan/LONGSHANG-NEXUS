@@ -224,6 +224,7 @@ Core tables:
 - The worker process periodically syncs upstream model catalogs into `model_registry`.
 - `usage_logs` power the dashboard for request volume, token usage, provider latency, error rate, and proxy latency.
 - API keys are stored as SHA-256 hashes in the `key` column. The raw key is only returned at create and rotate time.
+- API key `rate_limit=0` means unlimited requests per minute. Empty `allowed_models` or `*` means all models are allowed; values like `gpt-*` can be used as prefix allow rules.
 - The homepage now uses a direct local login flow and does not show third-party sign-in buttons.
 - The frontend panel stores multiple backend connection profiles in browser local storage and proxies requests through its own `/api/proxy/*` route.
 - If frontend and backend are deployed together in Docker, keep `DEFAULT_BACKEND_INTERNAL_URL=http://api:18437` in `.env`.

@@ -85,7 +85,7 @@ func jsonRequest(ctx context.Context, method, endpoint string, body any, headers
 	if response.StatusCode >= 400 {
 		defer response.Body.Close()
 		body, _ := io.ReadAll(response.Body)
-		return nil, fmt.Errorf("provider %s returned %d: %s", endpoint, response.StatusCode, string(body))
+		return nil, fmt.Errorf("provider %s returned %d: %s", endpoint, response.StatusCode, summarizeProviderError(response.Header.Get("Content-Type"), body))
 	}
 
 	return response, nil
@@ -94,6 +94,17 @@ func jsonRequest(ctx context.Context, method, endpoint string, body any, headers
 func copyJSONResponse[T any](response *http.Response, target *T) error {
 	defer response.Body.Close()
 	return json.NewDecoder(response.Body).Decode(target)
+}
+
+func summarizeProviderError(contentType string, body []byte) string {
+	text := strings.TrimSpace(string(body))
+	if strings.Contains(strings.ToLower(contentType), "text/html") || strings.Contains(text, "__NEXT_DATA__") {
+		return "received an HTML page instead of a provider API response. Check the upstream API base URL; it may be pointing at the frontend/admin panel rather than the provider API endpoint"
+	}
+	if len(text) > 1200 {
+		return text[:1200] + "...(truncated)"
+	}
+	return text
 }
 
 func stringifyContent(content any) string {
