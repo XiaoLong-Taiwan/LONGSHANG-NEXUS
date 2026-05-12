@@ -3,14 +3,18 @@ import { useRouter } from "next/router";
 import { PropsWithChildren, useEffect, useState } from "react";
 
 import LanguageSwitcher from "./LanguageSwitcher";
+import ThemeToggle from "./ThemeToggle";
 import { clearToken, currentUser, getToken } from "../lib/api";
-import { getActiveConnection } from "../lib/connections";
+import { getActiveConnection, loadConnections, setActiveConnection } from "../lib/connections";
 import { useI18n } from "../lib/i18n";
 
 export default function Layout({ children }: PropsWithChildren) {
   const router = useRouter();
-  const [connectionName, setConnectionName] = useState("Backend");
   const { t } = useI18n();
+  const [connectionName, setConnectionName] = useState("Backend");
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [activeConnectionId, setActiveConnectionId] = useState("");
+  const connections = loadConnections();
   const navItems = [
     { href: "/dashboard", label: t("nav.overview") },
     { href: "/dashboard/connections", label: t("nav.connections") },
@@ -18,8 +22,10 @@ export default function Layout({ children }: PropsWithChildren) {
     { href: "/dashboard/api-keys", label: t("nav.apiKeys") },
     { href: "/dashboard/provider-keys", label: t("nav.providerKeys") },
     { href: "/dashboard/proxies", label: t("nav.proxies") },
+    { href: "/dashboard/oauth-accounts", label: t("nav.oauthAccounts") },
     { href: "/dashboard/models", label: t("nav.models") },
     { href: "/dashboard/usage", label: t("nav.usage") },
+    { href: "/dashboard/settings", label: t("nav.settings") },
   ];
 
   useEffect(() => {
@@ -27,7 +33,9 @@ export default function Layout({ children }: PropsWithChildren) {
       router.replace("/");
       return;
     }
-    setConnectionName(getActiveConnection().name);
+    const active = getActiveConnection();
+    setConnectionName(active.name);
+    setActiveConnectionId(active.id);
     currentUser()
       .then((result) => {
         if (result.user.role !== "admin") {
@@ -42,51 +50,112 @@ export default function Layout({ children }: PropsWithChildren) {
   }, [router]);
 
   return (
-    <div className="min-h-screen p-4 md:p-6">
-      <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="panel overflow-hidden">
-          <div className="bg-ink px-6 py-8 text-white">
-            <div className="flex items-start justify-between gap-4">
-              <p className="text-xs uppercase tracking-[0.32em] text-white/60">AI Gateway</p>
-              <LanguageSwitcher />
+    <div className="min-h-screen px-3 py-3 md:px-5 md:py-5">
+      <div className="mx-auto flex max-w-[1680px] gap-4">
+        <aside className={`panel-strong fixed inset-y-3 left-3 z-40 w-[280px] overflow-hidden transition md:static md:translate-x-0 ${
+          mobileOpen ? "translate-x-0" : "-translate-x-[120%]"
+        }`}>
+          <div className="flex h-full flex-col">
+            <div className="border-b border-app px-5 py-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-app-muted">AI Gateway</p>
+                  <h1 className="mt-2 text-2xl font-semibold text-app">{t("layout.title")}</h1>
+                </div>
+                <button className="btn-secondary md:hidden" onClick={() => setMobileOpen(false)} type="button">
+                  {t("common.close")}
+                </button>
+              </div>
+              <p className="mt-3 text-sm text-app-muted">{t("layout.subtitle")}</p>
             </div>
-            <h1 className="mt-3 text-3xl font-semibold">{t("layout.title")}</h1>
-            <p className="mt-3 text-sm text-white/70">{t("layout.subtitle")}</p>
-            <div className="mt-5 rounded-2xl bg-white/10 px-4 py-3 text-sm text-white/85">
-              {t("layout.connectedBackend")}: <span className="font-semibold">{connectionName}</span>
+
+            <div className="border-b border-app px-5 py-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-app-muted">{t("layout.connectedBackend")}</p>
+              <select
+                className="field mt-3"
+                value={activeConnectionId}
+                onChange={(event) => {
+                  setActiveConnectionId(event.target.value);
+                  setActiveConnection(event.target.value);
+                  const next = connections.find((item) => item.id === event.target.value);
+                  if (next) {
+                    setConnectionName(next.name);
+                  }
+                }}
+              >
+                {connections.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
             </div>
-          </div>
-          <nav className="space-y-2 p-4">
-            {navItems.map((item) => {
-              const active = router.pathname === item.href;
-              return (
-                <Link
-                  href={item.href}
-                  key={item.href}
-                  className={`block rounded-2xl px-4 py-3 text-sm font-medium transition ${
-                    active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-          <div className="p-4 pt-0">
-            <button
-              className="btn-secondary w-full"
-              onClick={() => {
-                clearToken();
-                router.push("/");
-              }}
-            >
-              {t("layout.signOut")}
-            </button>
+
+            <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+              {navItems.map((item) => {
+                const active = router.pathname === item.href;
+                return (
+                  <Link
+                    href={item.href}
+                    key={item.href}
+                    className={`block rounded-[15px] px-4 py-3 text-sm font-medium transition ${
+                      active
+                        ? "bg-cyan-600 text-white"
+                        : "text-app-muted hover:bg-white/10 hover:text-app"
+                    }`}
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <div className="border-t border-app px-4 py-4">
+              <button
+                className="btn-secondary w-full"
+                onClick={() => {
+                  clearToken();
+                  router.push("/");
+                }}
+                type="button"
+              >
+                {t("layout.signOut")}
+              </button>
+            </div>
           </div>
         </aside>
 
-        <main className="space-y-6">{children}</main>
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
+          <header className="panel-strong sticky top-3 z-30 flex flex-col gap-3 px-4 py-4 md:px-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <button className="btn-secondary md:hidden" onClick={() => setMobileOpen(true)} type="button">
+                  Menu
+                </button>
+                <div>
+                  <p className="text-sm font-semibold text-app">{connectionName}</p>
+                  <p className="text-xs text-app-muted">{t("layout.connectedBackend")}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <ThemeToggle />
+                <LanguageSwitcher />
+              </div>
+            </div>
+          </header>
+
+          <main className="min-w-0 space-y-4">{children}</main>
+        </div>
       </div>
+
+      {mobileOpen ? (
+        <button
+          className="fixed inset-0 z-30 bg-slate-950/35 md:hidden"
+          onClick={() => setMobileOpen(false)}
+          type="button"
+        />
+      ) : null}
     </div>
   );
 }

@@ -46,6 +46,8 @@ type providerKeyUpsertRequest struct {
 	ProxyID               *string  `json:"proxy_id"`
 	Status                string   `json:"status"`
 	ModelDetectionEnabled *bool    `json:"model_detection_enabled"`
+	ModelOverrides        []string `json:"model_overrides"`
+	TestModel             string   `json:"test_model"`
 }
 
 func NewHandler(cfg config.Config, db *gorm.DB, providers *providers.Manager, keyPool *services.ProviderKeyPool, modelRouter *services.ModelRouter, usage *services.UsageService, monitoring *services.MonitoringService, modelSync *services.ModelSyncService) *Handler {
@@ -388,6 +390,8 @@ func (h *Handler) UpsertProviderKey(c *gin.Context) {
 	}
 
 	serializedKeys, _ := json.Marshal(normalizedKeys)
+	normalizedOverrides := normalizeStringList(payload.ModelOverrides)
+	serializedOverrides, _ := json.Marshal(normalizedOverrides)
 	record := models.ProviderKey{
 		Name:                  strings.TrimSpace(payload.Name),
 		Description:           strings.TrimSpace(payload.Description),
@@ -402,6 +406,8 @@ func (h *Handler) UpsertProviderKey(c *gin.Context) {
 		ProxyID:               normalizeNullableString(payload.ProxyID),
 		Status:                payload.Status,
 		ModelDetectionEnabled: modelDetectionEnabled,
+		ModelOverrides:        datatypes.JSON(serializedOverrides),
+		TestModel:             strings.TrimSpace(payload.TestModel),
 	}
 
 	id := c.Param("id")
@@ -410,6 +416,7 @@ func (h *Handler) UpsertProviderKey(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		_ = h.modelSync.SyncIntegrationModels(c.Request.Context(), record, normalizedOverrides, "manual_override")
 		c.JSON(http.StatusCreated, record)
 		return
 	}
@@ -427,6 +434,7 @@ func (h *Handler) UpsertProviderKey(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	_ = h.modelSync.SyncIntegrationModels(c.Request.Context(), record, normalizedOverrides, "manual_override")
 	c.JSON(http.StatusOK, record)
 }
 

@@ -2,64 +2,40 @@ import { useEffect, useState } from "react";
 
 import DataTable from "../../components/DataTable";
 import Layout from "../../components/Layout";
+import Modal from "../../components/Modal";
 import PageHeader from "../../components/PageHeader";
 import { apiRequest, withAdminPath } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 
-type ModelRecord = {
-  id: string;
-  provider: string;
+type AggregateModel = {
   model_name: string;
-  type: string;
+  providers: string[];
+  types: string[];
   priority: number;
   status: string;
   last_checked: string;
+  upstreams: Array<{
+    provider: string;
+    integration_id: string;
+    integration_name: string;
+    source: string;
+  }>;
 };
-
-type Feedback = {
-  type: "success" | "error";
-  message: string;
-} | null;
 
 export default function ModelsPage() {
   const { t } = useI18n();
-  const [items, setItems] = useState<ModelRecord[]>([]);
-  const [feedback, setFeedback] = useState<Feedback>(null);
-  const [busyAction, setBusyAction] = useState<"" | "detect" | "sync">("");
+  const [items, setItems] = useState<AggregateModel[]>([]);
+  const [detail, setDetail] = useState<AggregateModel | null>(null);
+  const [feedback, setFeedback] = useState("");
 
-  const load = () => apiRequest<ModelRecord[]>(withAdminPath("/models")).then(setItems);
+  async function load() {
+    const result = await apiRequest<AggregateModel[]>(withAdminPath("/models/aggregate"));
+    setItems(result);
+  }
 
   useEffect(() => {
-    load().catch((error) => setFeedback({ type: "error", message: toMessage(error, t("common.unknownError")) }));
-  }, [t]);
-
-  async function handleDetectAll() {
-    setBusyAction("detect");
-    setFeedback(null);
-    try {
-      await apiRequest(withAdminPath("/provider-keys/detect-models"), "POST");
-      await load();
-      setFeedback({ type: "success", message: t("models.detectSuccess") });
-    } catch (error) {
-      setFeedback({ type: "error", message: toMessage(error, t("common.unknownError")) });
-    } finally {
-      setBusyAction("");
-    }
-  }
-
-  async function handleSyncAll() {
-    setBusyAction("sync");
-    setFeedback(null);
-    try {
-      await apiRequest(withAdminPath("/models/sync"), "POST");
-      await load();
-      setFeedback({ type: "success", message: t("models.syncSuccess") });
-    } catch (error) {
-      setFeedback({ type: "error", message: toMessage(error, t("common.unknownError")) });
-    } finally {
-      setBusyAction("");
-    }
-  }
+    load().catch((error) => setFeedback(error instanceof Error ? error.message : "Failed to load"));
+  }, []);
 
   return (
     <Layout>
@@ -67,45 +43,54 @@ export default function ModelsPage() {
         title={t("models.title")}
         description={t("models.description")}
         action={
-          <div className="flex flex-wrap gap-3">
-            <button className="btn-secondary" disabled={busyAction !== ""} onClick={handleDetectAll} type="button">
-              {busyAction === "detect" ? t("common.testing") : t("models.detectAll")}
-            </button>
-            <button className="btn-primary" disabled={busyAction !== ""} onClick={handleSyncAll} type="button">
-              {busyAction === "sync" ? t("common.saving") : t("models.syncAll")}
-            </button>
-          </div>
+          <button
+            className="btn-primary"
+            onClick={async () => {
+              await apiRequest(withAdminPath("/models/sync"), "POST");
+              await load();
+              setFeedback(t("models.syncSuccess"));
+            }}
+            type="button"
+          >
+            {t("models.syncAll")}
+          </button>
         }
       />
 
-      {feedback ? <div className={feedback.type === "error" ? "alert-error" : "alert-success"}>{feedback.message}</div> : null}
+      {feedback ? <div className="alert-info">{feedback}</div> : null}
 
       <DataTable
-        columns={[
-          t("models.provider"),
-          t("models.model"),
-          t("models.type"),
-          t("models.priority"),
-          t("models.status"),
-          t("models.lastChecked"),
-        ]}
+        columns={[t("models.model"), t("models.provider"), t("models.type"), t("models.upstreams"), t("models.lastChecked"), "Actions"]}
         emptyMessage={t("common.empty")}
         rows={items.map((item) => [
-          item.provider,
-          <code key={item.id}>{item.model_name}</code>,
-          item.type,
-          item.priority,
-          item.status,
+          <code key={item.model_name}>{item.model_name}</code>,
+          item.providers.join(", "),
+          item.types.join(", "),
+          item.upstreams.length,
           item.last_checked ? new Date(item.last_checked).toLocaleString() : "-",
+          <button className="text-app-muted" onClick={() => setDetail(item)} type="button">View</button>,
         ])}
       />
+
+      <Modal
+        closeLabel={t("common.close")}
+        description="Inspect which upstream integrations expose this model."
+        open={detail !== null}
+        onClose={() => setDetail(null)}
+        title={detail?.model_name || "Model detail"}
+      >
+        <div className="grid gap-3">
+          {(detail?.upstreams || []).map((item) => (
+            <div key={`${item.provider}-${item.integration_id}-${item.source}`} className="rounded-[15px] border border-app px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-semibold text-app">{item.integration_name || item.provider}</p>
+                <span className="badge-muted">{item.source}</span>
+              </div>
+              <p className="mt-2 text-sm text-app-muted">{item.provider}</p>
+            </div>
+          ))}
+        </div>
+      </Modal>
     </Layout>
   );
-}
-
-function toMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-  return fallback;
 }

@@ -2,6 +2,7 @@ import { useRouter } from "next/router";
 import { FormEvent, useEffect, useState } from "react";
 
 import LanguageSwitcher from "../components/LanguageSwitcher";
+import ThemeToggle from "../components/ThemeToggle";
 import { login, probeConnection, setToken } from "../lib/api";
 import { type BackendConnection, getActiveConnection, getLastEmail, loadConnections, setActiveConnection, setLastEmail, upsertConnection } from "../lib/connections";
 import { useI18n } from "../lib/i18n";
@@ -100,18 +101,21 @@ export default function HomePage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-7xl flex-col justify-center gap-8 px-4 py-10 lg:grid lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
+    <div className="mx-auto flex min-h-screen max-w-[1680px] flex-col justify-center gap-6 px-3 py-6 md:px-5 md:py-8 lg:grid lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
       <section className="space-y-6">
         <div className="flex items-center justify-between gap-4">
-          <span className="inline-flex rounded-full bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-slate-500 shadow-sm">
+          <span className="inline-flex rounded-full border border-app bg-white/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-app-muted shadow-sm">
             {t("login.badge")}
           </span>
-          <LanguageSwitcher />
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <LanguageSwitcher />
+          </div>
         </div>
-        <h1 className="max-w-3xl text-5xl font-semibold leading-tight text-slate-950 md:text-6xl">
+        <h1 className="max-w-4xl text-4xl font-semibold leading-tight text-app md:text-6xl">
           {t("login.heroTitle")}
         </h1>
-        <p className="max-w-2xl text-lg text-slate-600">
+        <p className="max-w-3xl text-lg text-app-muted">
           {t("login.heroSubtitle")}
         </p>
         <div className="grid gap-4 md:grid-cols-3">
@@ -120,18 +124,18 @@ export default function HomePage() {
             t("login.heroPoint2"),
             t("login.heroPoint3"),
           ].map((item) => (
-            <div key={item} className="panel p-5 text-sm font-medium text-slate-700">
+            <div key={item} className="panel p-5 text-sm font-medium text-app">
               {item}
             </div>
           ))}
         </div>
       </section>
 
-      <section className="panel p-8">
+      <section className="panel p-5 md:p-8">
         <div className="mb-6">
-          <p className="text-sm font-medium text-slate-500">{t("login.cardEyebrow")}</p>
-          <h2 className="mt-2 text-3xl font-semibold text-slate-950">{t("login.cardTitle")}</h2>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="text-sm font-medium text-app-muted">{t("login.cardEyebrow")}</p>
+          <h2 className="mt-2 text-3xl font-semibold text-app">{t("login.cardTitle")}</h2>
+          <p className="mt-2 text-sm text-app-muted">
             {t("login.subtitle")}
           </p>
         </div>
@@ -171,21 +175,21 @@ export default function HomePage() {
           </button>
         </div>
         {showConnectionForm ? (
-          <form className="mt-4 grid gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4" onSubmit={handleSaveConnection}>
+          <form className="mt-4 grid gap-3 rounded-[15px] border border-app bg-transparent p-4" onSubmit={handleSaveConnection}>
             <input className="field" placeholder={t("login.backendName")} value={connectionForm.name} onChange={(event) => setConnectionForm({ ...connectionForm, name: event.target.value })} />
             <input className="field" placeholder={t("login.backendBaseUrl")} value={connectionForm.baseUrl} onChange={(event) => setConnectionForm({ ...connectionForm, baseUrl: event.target.value })} />
-            <label className="flex items-center gap-3 text-sm text-slate-700">
+            <label className="flex items-center gap-3 text-sm text-app">
               <input type="checkbox" checked={connectionForm.allowInsecureTls} onChange={(event) => setConnectionForm({ ...connectionForm, allowInsecureTls: event.target.checked })} />
               {t("login.allowSelfSigned")}
             </label>
             <button className="btn-primary" type="submit">{t("login.saveBackend")}</button>
           </form>
         ) : null}
-        <div className="mt-6 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+        <div className="mt-6 rounded-[15px] border border-app bg-transparent px-4 py-4 text-sm text-app-muted">
           <p>
-            {t("login.defaultAdmin")}: <span className="font-semibold text-slate-900">admin@example.com</span>
+            {t("login.defaultAdmin")}: <span className="font-semibold text-app">admin@example.com</span>
           </p>
-          <p className="mt-2">{t("login.connectionStatus")}: <span className="font-semibold text-slate-900">{connectionStatus}</span></p>
+          <p className="mt-2">{t("login.connectionStatus")}: <span className="font-semibold text-app">{connectionStatus}</span></p>
           <p className="mt-2">
             {t("login.manageConnections")}
           </p>

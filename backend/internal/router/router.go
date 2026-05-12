@@ -65,13 +65,22 @@ func Setup(cfg config.Config, db *gorm.DB, redis *redis.Client, handler *api.Han
 		admin.DELETE("/proxy-nodes/:id", handler.DeleteProxyNode)
 
 		admin.GET("/oauth-accounts", handler.ListOAuthAccounts)
+		admin.POST("/oauth-accounts", handler.UpsertOAuthAccount)
+		admin.PUT("/oauth-accounts/:id", handler.UpsertOAuthAccount)
+		admin.DELETE("/oauth-accounts/:id", handler.DeleteOAuthAccount)
+		admin.POST("/oauth-accounts/:id/detect-quota", handler.DetectOAuthQuota)
 		admin.GET("/oauth-accounts/:id/export", handler.ExportOAuthToken)
 
 		admin.GET("/models", handler.ListModelRegistry)
+		admin.GET("/models/aggregate", handler.AggregateModels)
 		admin.POST("/models/sync", handler.SyncModels)
+		admin.POST("/provider-keys/discover-models", handler.DiscoverProviderModels)
+		admin.POST("/provider-keys/test", handler.TestProviderConnection)
 
 		admin.GET("/usage", handler.UsageLogs)
 		admin.GET("/monitoring/overview", handler.MonitoringOverview)
+		admin.GET("/settings", handler.GetSettings)
+		admin.PUT("/settings", handler.SaveSettings)
 	}
 
 	v1 := engine.Group("/v1")

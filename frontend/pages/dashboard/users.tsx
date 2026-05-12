@@ -1,67 +1,96 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import DataTable from "../../components/DataTable";
 import Layout from "../../components/Layout";
+import Modal from "../../components/Modal";
 import PageHeader from "../../components/PageHeader";
 import { apiRequest, withAdminPath } from "../../lib/api";
+import { useI18n } from "../../lib/i18n";
 
 type User = {
-  id: string;
+  id?: string;
   email: string;
   role: string;
-  created_at: string;
+  created_at?: string;
+  password?: string;
 };
 
-export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [form, setForm] = useState({ email: "", password: "", role: "user" });
-  const [error, setError] = useState("");
+const emptyForm: User = { email: "", password: "", role: "user" };
 
-  const load = () => apiRequest<User[]>(withAdminPath("/users")).then(setUsers).catch((err) => setError(err.message));
+export default function UsersPage() {
+  const { t } = useI18n();
+  const [users, setUsers] = useState<User[]>([]);
+  const [form, setForm] = useState<User>(emptyForm);
+  const [open, setOpen] = useState(false);
+  const [feedback, setFeedback] = useState("");
+
+  async function load() {
+    const result = await apiRequest<User[]>(withAdminPath("/users"));
+    setUsers(result);
+  }
 
   useEffect(() => {
-    load();
+    load().catch((error) => setFeedback(error instanceof Error ? error.message : "Failed to load"));
   }, []);
-
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    await apiRequest(withAdminPath("/users"), "POST", form);
-    setForm({ email: "", password: "", role: "user" });
-    load();
-  }
 
   return (
     <Layout>
-      <PageHeader title="Users" description="Manage admin and user identities for the gateway." />
-      {error ? <div className="panel p-6 text-danger">{error}</div> : null}
-      <form className="panel grid gap-4 p-6 md:grid-cols-4" onSubmit={handleSubmit}>
-        <input className="field" placeholder="Email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
-        <input className="field" placeholder="Password" type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
-        <select className="field" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
-          <option value="user">user</option>
-          <option value="admin">admin</option>
-        </select>
-        <button className="btn-primary" type="submit">Create user</button>
-      </form>
-
+      <PageHeader
+        title={t("users.title")}
+        description={t("users.description")}
+        action={<button className="btn-primary" onClick={() => setOpen(true)} type="button">{t("users.create")}</button>}
+      />
+      {feedback ? <div className="alert-info">{feedback}</div> : null}
       <DataTable
-        columns={["Email", "Role", "Created", "Action"]}
+        columns={[t("users.email"), t("users.role"), "Created", "Action"]}
+        emptyMessage={t("common.empty")}
         rows={users.map((user) => [
           user.email,
           user.role,
-          new Date(user.created_at).toLocaleString(),
+          user.created_at ? new Date(user.created_at).toLocaleString() : "-",
           <button
             key={user.id}
             className="text-danger"
             onClick={async () => {
               await apiRequest(withAdminPath(`/users/${user.id}`), "DELETE");
-              load();
+              await load();
             }}
+            type="button"
           >
             Delete
           </button>,
         ])}
       />
+      <Modal
+        closeLabel={t("common.close")}
+        open={open}
+        onClose={() => { setOpen(false); setForm(emptyForm); }}
+        title={t("users.create")}
+      >
+        <div className="grid gap-4 md:grid-cols-3">
+          <input className="field" placeholder={t("users.email")} value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+          <input className="field" placeholder={t("users.password")} type="password" value={form.password || ""} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+          <select className="field" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
+            <option value="user">user</option>
+            <option value="admin">admin</option>
+          </select>
+        </div>
+        <div className="mt-6 flex justify-end gap-3">
+          <button className="btn-secondary" onClick={() => setOpen(false)} type="button">{t("common.cancel")}</button>
+          <button
+            className="btn-primary"
+            onClick={async () => {
+              await apiRequest(withAdminPath("/users"), "POST", form);
+              setOpen(false);
+              setForm(emptyForm);
+              await load();
+            }}
+            type="button"
+          >
+            {t("common.save")}
+          </button>
+        </div>
+      </Modal>
     </Layout>
   );
 }

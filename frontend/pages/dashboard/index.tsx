@@ -12,11 +12,18 @@ type Overview = {
     requests: number;
     tokens: number;
     avg_latency: number;
+    p95_latency: number;
     errors: number;
+    rpm: number;
+    tpm: number;
+    success_rate: number;
+    prompt_tokens: number;
+    completion_tokens: number;
   };
   provider_stats: Array<{ provider: string; requests: number; avg_latency: number; tokens: number; errors: number }>;
   proxy_stats: Array<{ proxy_id: string; requests: number; avg_latency: number }>;
   timeline: Array<{ bucket: string; requests: number; tokens: number; avg_latency: number }>;
+  model_stats: Array<{ model: string; requests: number; tokens: number }>;
 };
 
 export default function DashboardPage() {
@@ -36,17 +43,25 @@ export default function DashboardPage() {
 
       {error ? <div className="alert-error">{error}</div> : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <StatCard title={t("overview.requests24h")} value={data?.totals.requests ?? 0} hint={t("overview.rollingWindow")} />
         <StatCard title={t("overview.tokens24h")} value={data?.totals.tokens ?? 0} hint={t("overview.promptAndCompletion")} />
         <StatCard title={t("overview.avgLatency")} value={`${Math.round(data?.totals.avg_latency ?? 0)} ms`} hint={t("overview.endToEnd")} />
-        <StatCard title={t("overview.errors")} value={data?.totals.errors ?? 0} hint="status >= 400" />
+        <StatCard title={t("overview.p95Latency")} value={`${Math.round(data?.totals.p95_latency ?? 0)} ms`} hint="tail" />
+        <StatCard title={t("overview.rpm")} value={(data?.totals.rpm ?? 0).toFixed(2)} hint="24h avg" />
+        <StatCard title={t("overview.tpm")} value={(data?.totals.tpm ?? 0).toFixed(2)} hint="24h avg" />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard title={t("overview.successRate")} value={`${Math.round((data?.totals.success_rate ?? 0) * 100)}%`} hint="status < 400" />
+        <StatCard title="Prompt tokens" value={data?.totals.prompt_tokens ?? 0} hint="24h" />
+        <StatCard title="Completion tokens" value={data?.totals.completion_tokens ?? 0} hint="24h" />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <section className="panel p-6">
-          <h3 className="text-lg font-semibold text-slate-900">{t("overview.timelineTitle")}</h3>
-          <p className="mt-1 text-sm text-slate-500">{t("overview.timelineDescription")}</p>
+          <h3 className="text-lg font-semibold text-app">{t("overview.timelineTitle")}</h3>
+          <p className="mt-1 text-sm text-app-muted">{t("overview.timelineDescription")}</p>
           <div className="mt-6 h-80">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data?.timeline ?? []}>
@@ -67,8 +82,8 @@ export default function DashboardPage() {
         </section>
 
         <section className="panel p-6">
-          <h3 className="text-lg font-semibold text-slate-900">{t("overview.proxyLatencyTitle")}</h3>
-          <p className="mt-1 text-sm text-slate-500">{t("overview.proxyLatencyDescription")}</p>
+          <h3 className="text-lg font-semibold text-app">{t("overview.proxyLatencyTitle")}</h3>
+          <p className="mt-1 text-sm text-app-muted">{t("overview.proxyLatencyDescription")}</p>
           <div className="mt-6 h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data?.proxy_stats ?? []}>
@@ -83,26 +98,43 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <section className="panel p-6">
-        <h3 className="text-lg font-semibold text-slate-900">{t("overview.providerHealthTitle")}</h3>
-        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
+        <section className="panel p-6">
+          <h3 className="text-lg font-semibold text-app">{t("overview.providerHealthTitle")}</h3>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
           {(data?.provider_stats ?? []).map((item) => (
-            <div key={item.provider} className="rounded-3xl border border-slate-100 bg-slate-50 p-5">
+            <div key={item.provider} className="rounded-[15px] border border-app bg-transparent p-5">
               <div className="flex items-center justify-between">
                 <h4 className="text-lg font-semibold capitalize">{item.provider}</h4>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                <span className="badge-muted">
                   {t("overview.providerRequests", { count: item.requests })}
                 </span>
               </div>
-              <div className="mt-4 space-y-2 text-sm text-slate-600">
+              <div className="mt-4 space-y-2 text-sm text-app-muted">
                 <p>{t("overview.providerTokens", { count: item.tokens })}</p>
                 <p>{t("overview.providerLatency", { count: Math.round(item.avg_latency) })}</p>
                 <p>{t("overview.providerErrors", { count: item.errors })}</p>
               </div>
             </div>
           ))}
-        </div>
-      </section>
+          </div>
+        </section>
+
+        <section className="panel p-6">
+          <h3 className="text-lg font-semibold text-app">Top models</h3>
+          <div className="mt-4 space-y-3">
+            {(data?.model_stats ?? []).slice(0, 8).map((item) => (
+              <div key={item.model} className="rounded-[15px] border border-app px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <code className="text-sm text-app">{item.model}</code>
+                  <span className="badge-muted">{item.requests} req</span>
+                </div>
+                <p className="mt-2 text-sm text-app-muted">{item.tokens} tokens</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
     </Layout>
   );
 }

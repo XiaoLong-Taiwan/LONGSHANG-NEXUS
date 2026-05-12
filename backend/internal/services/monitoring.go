@@ -20,21 +20,35 @@ func (s *MonitoringService) Overview(ctx context.Context) (map[string]any, error
 	since := now.Add(-24 * time.Hour)
 
 	var totals struct {
-		Requests   int64   `json:"requests"`
-		Tokens     int64   `json:"tokens"`
-		AvgLatency float64 `json:"avg_latency"`
-		Errors     int64   `json:"errors"`
+		Requests      int64   `json:"requests"`
+		Tokens        int64   `json:"tokens"`
+		AvgLatency    float64 `json:"avg_latency"`
+		P95Latency    float64 `json:"p95_latency"`
+		Errors        int64   `json:"errors"`
+		RPM           float64 `json:"rpm"`
+		TPM           float64 `json:"tpm"`
+		SuccessRate   float64 `json:"success_rate"`
+		PromptTokens  int64   `json:"prompt_tokens"`
+		CompletionTokens int64 `json:"completion_tokens"`
 	}
 	if err := s.db.WithContext(ctx).Raw(`
 		SELECT
 			COUNT(*) AS requests,
 			COALESCE(SUM(tokens), 0) AS tokens,
 			COALESCE(AVG(latency), 0) AS avg_latency,
-			COALESCE(SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END), 0) AS errors
+			COALESCE(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency), 0) AS p95_latency,
+			COALESCE(SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END), 0) AS errors,
+			COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+			COALESCE(SUM(completion_tokens), 0) AS completion_tokens
 		FROM usage_logs
 		WHERE created_at >= ?
 	`, since).Scan(&totals).Error; err != nil {
 		return nil, err
+	}
+	totals.RPM = float64(totals.Requests) / (24 * 60)
+	totals.TPM = float64(totals.Tokens) / (24 * 60)
+	if totals.Requests > 0 {
+		totals.SuccessRate = float64(totals.Requests-totals.Errors) / float64(totals.Requests)
 	}
 
 	var providerStats []map[string]any
@@ -75,6 +89,18 @@ func (s *MonitoringService) Overview(ctx context.Context) (map[string]any, error
 		return nil, err
 	}
 
+	var modelStats []map[string]any
+	if err := s.db.WithContext(ctx).Raw(`
+		SELECT model, COUNT(*) AS requests, COALESCE(SUM(tokens), 0) AS tokens
+		FROM usage_logs
+		WHERE created_at >= ?
+		GROUP BY model
+		ORDER BY requests DESC
+		LIMIT 20
+	`, since).Scan(&modelStats).Error; err != nil {
+		return nil, err
+	}
+
 	return map[string]any{
 		"window_start": since,
 		"window_end":   now,
@@ -82,5 +108,6 @@ func (s *MonitoringService) Overview(ctx context.Context) (map[string]any, error
 		"provider_stats": providerStats,
 		"proxy_stats":  proxyStats,
 		"timeline":     timeline,
+		"model_stats":  modelStats,
 	}, nil
 }

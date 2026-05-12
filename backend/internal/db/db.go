@@ -35,8 +35,12 @@ func Connect(cfg config.Config) (*Clients, error) {
 			&models.ProviderKey{},
 			&models.ModelRegistry{},
 			&models.UsageLog{},
+			&models.GatewaySetting{},
 		); err != nil {
 			return nil, fmt.Errorf("migrate database: %w", err)
+		}
+		if err := ensureFeatureSchema(database); err != nil {
+			return nil, err
 		}
 	} else {
 		if err := verifySchema(database); err != nil {
@@ -93,9 +97,38 @@ func ensureFeatureSchema(database *gorm.DB) error {
 		`ALTER TABLE provider_keys ADD COLUMN IF NOT EXISTS api_keys JSONB NOT NULL DEFAULT '[]'::jsonb`,
 		`ALTER TABLE provider_keys ADD COLUMN IF NOT EXISTS auth_mode TEXT NOT NULL DEFAULT 'api_key'`,
 		`ALTER TABLE provider_keys ADD COLUMN IF NOT EXISTS oauth_account_id UUID NULL`,
+		`DO $$
+		BEGIN
+		  IF EXISTS (
+		    SELECT 1
+		    FROM information_schema.columns
+		    WHERE table_name = 'provider_keys' AND column_name = 'o_auth_account_id'
+		  ) THEN
+		    UPDATE provider_keys
+		       SET oauth_account_id = COALESCE(oauth_account_id, o_auth_account_id)
+		     WHERE o_auth_account_id IS NOT NULL;
+		  END IF;
+		END $$`,
 		`ALTER TABLE provider_keys ADD COLUMN IF NOT EXISTS access_mode TEXT NOT NULL DEFAULT 'round_robin'`,
 		`ALTER TABLE provider_keys ADD COLUMN IF NOT EXISTS model_detection_enabled BOOLEAN NOT NULL DEFAULT true`,
+		`ALTER TABLE provider_keys ADD COLUMN IF NOT EXISTS model_overrides JSONB NOT NULL DEFAULT '[]'::jsonb`,
+		`ALTER TABLE provider_keys ADD COLUMN IF NOT EXISTS test_model TEXT NOT NULL DEFAULT ''`,
 		`CREATE INDEX IF NOT EXISTS idx_provider_keys_oauth_account_id ON provider_keys(oauth_account_id)`,
+		`ALTER TABLE oauth_accounts ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE oauth_accounts ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE oauth_accounts ADD COLUMN IF NOT EXISTS provider_account_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE oauth_accounts ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`,
+		`ALTER TABLE oauth_accounts ADD COLUMN IF NOT EXISTS quota_used DOUBLE PRECISION NOT NULL DEFAULT 0`,
+		`ALTER TABLE oauth_accounts ADD COLUMN IF NOT EXISTS quota_total DOUBLE PRECISION NOT NULL DEFAULT 0`,
+		`ALTER TABLE oauth_accounts ADD COLUMN IF NOT EXISTS quota_unit TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE oauth_accounts ADD COLUMN IF NOT EXISTS last_quota_check TIMESTAMPTZ NULL`,
+		`ALTER TABLE oauth_accounts ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE oauth_accounts ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb`,
+		`CREATE TABLE IF NOT EXISTS gateway_settings (
+		  key TEXT PRIMARY KEY,
+		  value JSONB NOT NULL DEFAULT '{}'::jsonb,
+		  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
 		`UPDATE provider_keys
 		   SET api_keys = jsonb_build_array(api_key)
 		 WHERE COALESCE(api_key, '') <> ''

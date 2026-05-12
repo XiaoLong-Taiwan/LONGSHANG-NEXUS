@@ -1,7 +1,8 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import DataTable from "../../components/DataTable";
 import Layout from "../../components/Layout";
+import Modal from "../../components/Modal";
 import PageHeader from "../../components/PageHeader";
 import { probeConnection } from "../../lib/api";
 import { getActiveConnection, loadConnections, removeConnection, setActiveConnection, upsertConnection, type BackendConnection } from "../../lib/connections";
@@ -20,6 +21,7 @@ export default function ConnectionsPage() {
   const [activeId, setActiveId] = useState("");
   const [status, setStatus] = useState("");
   const [form, setForm] = useState<BackendConnection>(emptyForm);
+  const [open, setOpen] = useState(false);
 
   function refresh() {
     const connections = loadConnections();
@@ -32,33 +34,15 @@ export default function ConnectionsPage() {
     refresh();
   }, []);
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    const connection = {
-      ...form,
-      id: form.id || slugify(form.name || form.baseUrl),
-    };
-    upsertConnection(connection);
-    setForm(emptyForm);
-    refresh();
-    setStatus(t("connections.saved", { name: connection.name }));
-  }
-
   return (
     <Layout>
-      <PageHeader title={t("connections.title")} description={t("connections.description")} />
+      <PageHeader
+        title={t("connections.title")}
+        description={t("connections.description")}
+        action={<button className="btn-primary" onClick={() => setOpen(true)} type="button">{t("connections.save")}</button>}
+      />
 
       {status ? <div className="alert-info">{status}</div> : null}
-
-      <form className="panel grid gap-4 p-6 md:grid-cols-4" onSubmit={handleSubmit}>
-        <input className="field" placeholder={t("connections.name")} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-        <input className="field md:col-span-2" placeholder={t("connections.baseUrl")} value={form.baseUrl} onChange={(event) => setForm({ ...form, baseUrl: event.target.value })} />
-        <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
-          <input type="checkbox" checked={form.allowInsecureTls} onChange={(event) => setForm({ ...form, allowInsecureTls: event.target.checked })} />
-          {t("login.allowSelfSigned")}
-        </label>
-        <button className="btn-primary md:col-span-4" type="submit">{t("connections.save")}</button>
-      </form>
 
       <DataTable
         columns={[t("provider.tableName"), t("connections.baseUrl"), t("connections.tls"), t("connections.status"), t("connections.actions")]}
@@ -70,8 +54,8 @@ export default function ConnectionsPage() {
           item.id === activeId ? t("connections.active") : t("connections.idle"),
           <div key={`actions-${item.id}`} className="flex gap-3">
             <button
-              className="text-sea"
-              onClick={async () => {
+              className="text-app-muted"
+              onClick={() => {
                 setActiveConnection(item.id);
                 refresh();
                 setStatus(t("connections.switched", { name: item.name }));
@@ -81,7 +65,7 @@ export default function ConnectionsPage() {
               {t("connections.activate")}
             </button>
             <button
-              className="text-amber-600"
+              className="text-app-muted"
               onClick={async () => {
                 setActiveConnection(item.id);
                 try {
@@ -108,6 +92,38 @@ export default function ConnectionsPage() {
           </div>,
         ])}
       />
+
+      <Modal closeLabel={t("common.close")} open={open} onClose={() => setOpen(false)} title={t("connections.save")}>
+        <div className="grid gap-4">
+          <input className="field" placeholder={t("connections.name")} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          <input className="field" placeholder={t("connections.baseUrl")} value={form.baseUrl} onChange={(event) => setForm({ ...form, baseUrl: event.target.value })} />
+          <label className="flex items-center gap-3 rounded-[15px] border border-app px-4 py-3 text-sm text-app">
+            <input type="checkbox" checked={form.allowInsecureTls} onChange={(event) => setForm({ ...form, allowInsecureTls: event.target.checked })} />
+            {t("login.allowSelfSigned")}
+          </label>
+        </div>
+        <div className="mt-6 flex justify-end gap-3">
+          <button className="btn-secondary" onClick={() => setOpen(false)} type="button">{t("common.cancel")}</button>
+          <button
+            className="btn-primary"
+            onClick={() => {
+              const connection = {
+                ...form,
+                id: form.id || slugify(form.name || form.baseUrl),
+              };
+              upsertConnection(connection);
+              setActiveConnection(connection.id);
+              setForm(emptyForm);
+              setOpen(false);
+              refresh();
+              setStatus(t("connections.saved", { name: connection.name }));
+            }}
+            type="button"
+          >
+            {t("common.save")}
+          </button>
+        </div>
+      </Modal>
     </Layout>
   );
 }
