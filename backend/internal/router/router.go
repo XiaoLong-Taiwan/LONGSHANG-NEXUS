@@ -78,6 +78,10 @@ func Setup(cfg config.Config, db *gorm.DB, redis *redis.Client, handler *api.Han
 		admin.GET("/models", handler.ListModelRegistry)
 		admin.GET("/models/aggregate", handler.AggregateModels)
 		admin.POST("/models/sync", handler.SyncModels)
+		admin.GET("/model-mappings", handler.ListModelMappings)
+		admin.POST("/model-mappings", handler.UpsertModelMapping)
+		admin.PUT("/model-mappings/:id", handler.UpsertModelMapping)
+		admin.DELETE("/model-mappings/:id", handler.DeleteModelMapping)
 		admin.POST("/provider-keys/discover-models", handler.DiscoverProviderModels)
 		admin.POST("/provider-keys/test", handler.TestProviderConnection)
 

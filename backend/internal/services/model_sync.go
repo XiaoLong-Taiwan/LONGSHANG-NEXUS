@@ -313,24 +313,3 @@ func ModelRegistrySources(raw datatypes.JSON) ([]providerModelSource, error) {
 	}
 	return payload.Sources, nil
 }
-
-func inferModelType(model string) string {
-	switch {
-	case containsAny(model, "embedding"):
-		return "embedding"
-	case containsAny(model, "image", "imagen", "dall"):
-		return "image"
-	default:
-		return "chat"
-	}
-}
-
-func containsAny(source string, values ...string) bool {
-	lower := strings.ToLower(source)
-	for _, value := range values {
-		if strings.Contains(lower, strings.ToLower(value)) {
-			return true
-		}
-	}
-	return false
-}

@@ -100,6 +100,19 @@ type ModelRegistry struct {
 	UpdatedAt    time.Time      `json:"updated_at"`
 }
 
+type ModelMapping struct {
+	ID            string    `gorm:"primaryKey;size:36" json:"id"`
+	PublicModel   string    `gorm:"column:public_model;index;not null" json:"public_model"`
+	Provider      string    `gorm:"index;not null" json:"provider"`
+	UpstreamModel string    `gorm:"column:upstream_model;not null" json:"upstream_model"`
+	Type          string    `gorm:"index;not null;default:chat" json:"type"`
+	ProviderKeyID *string   `gorm:"column:provider_key_id;index" json:"provider_key_id"`
+	Priority      int       `gorm:"default:100" json:"priority"`
+	Status        string    `gorm:"index;default:active" json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
 type UsageLog struct {
 	ID               string    `gorm:"primaryKey;size:36" json:"id"`
 	APIKeyID         *string   `gorm:"index" json:"api_key_id"`
@@ -127,6 +140,7 @@ func (m *OAuthAccount) BeforeCreate(_ *gorm.DB) error   { return ensureID(&m.ID)
 func (m *ProxyNode) BeforeCreate(_ *gorm.DB) error      { return ensureID(&m.ID) }
 func (m *ProviderKey) BeforeCreate(_ *gorm.DB) error    { return ensureID(&m.ID) }
 func (m *ModelRegistry) BeforeCreate(_ *gorm.DB) error  { return ensureID(&m.ID) }
+func (m *ModelMapping) BeforeCreate(_ *gorm.DB) error   { return ensureID(&m.ID) }
 func (m *UsageLog) BeforeCreate(_ *gorm.DB) error       { return ensureID(&m.ID) }
 
 func ensureID(id *string) error {
@@ -138,6 +152,10 @@ func ensureID(id *string) error {
 
 func (ModelRegistry) TableName() string {
 	return "model_registry"
+}
+
+func (ModelMapping) TableName() string {
+	return "model_mappings"
 }
 
 func (OAuthAccount) TableName() string {

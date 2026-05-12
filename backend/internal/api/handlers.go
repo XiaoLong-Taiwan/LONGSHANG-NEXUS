@@ -50,6 +50,16 @@ type providerKeyUpsertRequest struct {
 	TestModel             string   `json:"test_model"`
 }
 
+type modelMappingRequest struct {
+	PublicModel   string  `json:"public_model"`
+	Provider      string  `json:"provider"`
+	UpstreamModel string  `json:"upstream_model"`
+	Type          string  `json:"type"`
+	ProviderKeyID *string `json:"provider_key_id"`
+	Priority      int     `json:"priority"`
+	Status        string  `json:"status"`
+}
+
 func NewHandler(cfg config.Config, db *gorm.DB, providers *providers.Manager, keyPool *services.ProviderKeyPool, modelRouter *services.ModelRouter, usage *services.UsageService, monitoring *services.MonitoringService, modelSync *services.ModelSyncService) *Handler {
 	return &Handler{
 		cfg:        cfg,
@@ -533,6 +543,80 @@ func (h *Handler) ListModelRegistry(c *gin.Context) {
 	c.JSON(http.StatusOK, items)
 }
 
+func (h *Handler) ListModelMappings(c *gin.Context) {
+	var items []models.ModelMapping
+	if err := h.db.Order("public_model asc, priority desc").Find(&items).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, items)
+}
+
+func (h *Handler) UpsertModelMapping(c *gin.Context) {
+	var payload modelMappingRequest
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(payload.PublicModel) == "" || strings.TrimSpace(payload.Provider) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "public_model and provider are required"})
+		return
+	}
+	if strings.TrimSpace(payload.UpstreamModel) == "" {
+		payload.UpstreamModel = payload.PublicModel
+	}
+	if strings.TrimSpace(payload.Type) == "" {
+		payload.Type = "chat"
+	}
+	if strings.TrimSpace(payload.Status) == "" {
+		payload.Status = "active"
+	}
+	if payload.Priority == 0 {
+		payload.Priority = 100
+	}
+
+	record := models.ModelMapping{
+		PublicModel:   strings.TrimSpace(payload.PublicModel),
+		Provider:      strings.TrimSpace(payload.Provider),
+		UpstreamModel: strings.TrimSpace(payload.UpstreamModel),
+		Type:          strings.TrimSpace(payload.Type),
+		ProviderKeyID: normalizeNullableString(payload.ProviderKeyID),
+		Priority:      payload.Priority,
+		Status:        payload.Status,
+	}
+
+	id := c.Param("id")
+	if id == "" {
+		if err := h.db.Create(&record).Error; err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusCreated, record)
+		return
+	}
+
+	existing := models.ModelMapping{}
+	if err := h.db.First(&existing, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "model mapping not found"})
+		return
+	}
+	record.ID = existing.ID
+	record.CreatedAt = existing.CreatedAt
+	if err := h.db.Save(&record).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, record)
+}
+
+func (h *Handler) DeleteModelMapping(c *gin.Context) {
+	if err := h.db.Delete(&models.ModelMapping{}, "id = ?", c.Param("id")).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func (h *Handler) SyncModels(c *gin.Context) {
 	providerName := c.Query("provider")
 	var err error
@@ -572,8 +656,29 @@ func (h *Handler) OpenAIModels(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	var mappings []models.ModelMapping
+	if err := h.db.Where("status = ?", "active").Order("priority desc").Find(&mappings).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	items := make([]openai.ModelInfo, 0, len(registry))
+	seen := map[string]struct{}{}
+	for _, item := range mappings {
+		if _, exists := seen[item.PublicModel]; exists {
+			continue
+		}
+		seen[item.PublicModel] = struct{}{}
+		items = append(items, openai.ModelInfo{
+			ID:      item.PublicModel,
+			Object:  "model",
+			OwnedBy: item.Provider,
+		})
+	}
 	for _, item := range registry {
+		if _, exists := seen[item.ModelName]; exists {
+			continue
+		}
+		seen[item.ModelName] = struct{}{}
 		items = append(items, openai.ModelInfo{
 			ID:      item.ModelName,
 			Object:  "model",
@@ -607,7 +712,11 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 	if err != nil {
 		apiKeyID := apiKey.ID
 		h.usage.Log(c.Request.Context(), &apiKeyID, "", req.Model, nil, latency, openai.Usage{}, http.StatusBadGateway, err.Error())
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		status := http.StatusBadGateway
+		if isClientModelRoutingError(err) {
+			status = http.StatusBadRequest
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 	apiKeyID := apiKey.ID
@@ -629,9 +738,9 @@ func (h *Handler) Embeddings(c *gin.Context) {
 		return
 	}
 
-	routes, err := h.models.Resolve(c.Request.Context(), req.Model)
+	routes, err := h.models.ResolveForType(c.Request.Context(), req.Model, "embedding")
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -642,7 +751,7 @@ func (h *Handler) Embeddings(c *gin.Context) {
 		if !ok {
 			continue
 		}
-		providerRoutes, err := h.keyPool.RoutesForProvider(c.Request.Context(), candidate.Provider, candidate.Model, h.cfg.DefaultBalanceStrategy)
+		providerRoutes, err := h.providerRoutesForCandidate(c.Request.Context(), candidate)
 		if err != nil {
 			lastErr = err
 			continue
@@ -683,9 +792,9 @@ func (h *Handler) Images(c *gin.Context) {
 		return
 	}
 
-	routes, err := h.models.Resolve(c.Request.Context(), req.Model)
+	routes, err := h.models.ResolveForType(c.Request.Context(), req.Model, "image")
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -696,7 +805,7 @@ func (h *Handler) Images(c *gin.Context) {
 		if !ok {
 			continue
 		}
-		providerRoutes, err := h.keyPool.RoutesForProvider(c.Request.Context(), candidate.Provider, candidate.Model, h.cfg.DefaultBalanceStrategy)
+		providerRoutes, err := h.providerRoutesForCandidate(c.Request.Context(), candidate)
 		if err != nil {
 			lastErr = err
 			continue
@@ -722,7 +831,7 @@ func (h *Handler) Images(c *gin.Context) {
 }
 
 func (h *Handler) executeChat(ctx context.Context, req openai.ChatCompletionRequest) (*openai.ChatCompletionResponse, providers.Route, error) {
-	routes, err := h.models.Resolve(ctx, req.Model)
+	routes, err := h.models.ResolveForType(ctx, req.Model, "chat")
 	if err != nil {
 		return nil, providers.Route{}, err
 	}
@@ -734,7 +843,7 @@ func (h *Handler) executeChat(ctx context.Context, req openai.ChatCompletionRequ
 			continue
 		}
 
-		providerRoutes, err := h.keyPool.RoutesForProvider(ctx, candidate.Provider, candidate.Model, h.cfg.DefaultBalanceStrategy)
+		providerRoutes, err := h.providerRoutesForCandidate(ctx, candidate)
 		if err != nil {
 			lastErr = err
 			continue
@@ -756,9 +865,9 @@ func (h *Handler) executeChat(ctx context.Context, req openai.ChatCompletionRequ
 }
 
 func (h *Handler) streamChatCompletions(c *gin.Context, apiKey models.APIKey, req openai.ChatCompletionRequest) {
-	routes, err := h.models.Resolve(c.Request.Context(), req.Model)
+	routes, err := h.models.ResolveForType(c.Request.Context(), req.Model, "chat")
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -769,7 +878,7 @@ func (h *Handler) streamChatCompletions(c *gin.Context, apiKey models.APIKey, re
 		if !ok {
 			continue
 		}
-		providerRoutes, err := h.keyPool.RoutesForProvider(c.Request.Context(), candidate.Provider, candidate.Model, h.cfg.DefaultBalanceStrategy)
+		providerRoutes, err := h.providerRoutesForCandidate(c.Request.Context(), candidate)
 		if err != nil {
 			lastErr = err
 			continue
@@ -790,6 +899,13 @@ func (h *Handler) streamChatCompletions(c *gin.Context, apiKey models.APIKey, re
 		}
 	}
 	c.JSON(http.StatusBadGateway, gin.H{"error": errorText(lastErr, "streaming request failed")})
+}
+
+func (h *Handler) providerRoutesForCandidate(ctx context.Context, candidate services.ModelRoute) ([]providers.Route, error) {
+	if strings.TrimSpace(candidate.ProviderKeyID) != "" {
+		return h.keyPool.RoutesForIntegration(ctx, candidate.ProviderKeyID, candidate.Model)
+	}
+	return h.keyPool.RoutesForProvider(ctx, candidate.Provider, candidate.Model, h.cfg.DefaultBalanceStrategy)
 }
 
 func (h *Handler) isModelAllowed(apiKey models.APIKey, model string) bool {
@@ -883,6 +999,16 @@ func errorText(err error, fallback string) string {
 		return fallback
 	}
 	return err.Error()
+}
+
+func isClientModelRoutingError(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "not available for chat") ||
+		strings.Contains(text, "not available for embedding") ||
+		strings.Contains(text, "not available for image")
 }
 
 func normalizeStringList(values []string) []string {
