@@ -131,7 +131,7 @@ export default function Layout({ children }: PropsWithChildren) {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <button className="btn-secondary md:hidden" onClick={() => setMobileOpen(true)} type="button">
-                  Menu
+                  {t("common.menu")}
                 </button>
                 <div>
                   <p className="text-sm font-semibold text-app">{connectionName}</p>

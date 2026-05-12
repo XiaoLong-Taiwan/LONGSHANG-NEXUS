@@ -45,7 +45,7 @@ export default function ProxiesPage() {
       />
 
       <DataTable
-        columns={["Type", "Endpoint", "Region", "Latency", "Status", "Action"]}
+        columns={[t("proxies.type"), t("proxies.endpoint"), t("proxies.region"), t("proxies.latency"), t("common.status"), t("common.actions")]}
         emptyMessage={t("common.empty")}
         rows={items.map((item) => [
           item.type,
@@ -62,7 +62,7 @@ export default function ProxiesPage() {
             }}
             type="button"
           >
-            Delete
+            {t("common.delete")}
           </button>,
         ])}
       />
@@ -73,11 +73,11 @@ export default function ProxiesPage() {
             <option value="http">http</option>
             <option value="socks5">socks5</option>
           </select>
-          <input className="field" placeholder="Host" value={form.host} onChange={(event) => setForm({ ...form, host: event.target.value })} />
-          <input className="field" placeholder="Port" type="number" value={form.port} onChange={(event) => setForm({ ...form, port: Number(event.target.value) })} />
-          <input className="field" placeholder="Username" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
-          <input className="field" placeholder="Password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
-          <input className="field" placeholder="Region" value={form.region} onChange={(event) => setForm({ ...form, region: event.target.value })} />
+          <input className="field" placeholder={t("proxies.host")} value={form.host} onChange={(event) => setForm({ ...form, host: event.target.value })} />
+          <input className="field" placeholder={t("proxies.port")} type="number" value={form.port} onChange={(event) => setForm({ ...form, port: Number(event.target.value) })} />
+          <input className="field" placeholder={t("proxies.username")} value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
+          <input className="field" placeholder={t("proxies.password")} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+          <input className="field" placeholder={t("proxies.region")} value={form.region} onChange={(event) => setForm({ ...form, region: event.target.value })} />
         </div>
         <div className="mt-6 flex justify-end gap-3">
           <button className="btn-secondary" onClick={() => setOpen(false)} type="button">{t("common.cancel")}</button>

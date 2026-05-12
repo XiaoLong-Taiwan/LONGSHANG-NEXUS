@@ -21,6 +21,7 @@ The project intentionally excludes payment, recharge, token sales, balance, subs
 - Optional HTTPS for both frontend and backend
 - Built-in language library with English, Simplified Chinese, and Traditional Chinese
 - Upstream integrations support grouped keys, proxy assignment, model auto-detection, and OAuth-account token mode
+- OAuth account helper can generate authorization URLs, show redirect URIs, capture localhost callback URLs, and exchange standard authorization codes for tokens
 
 ## Project Structure
 
@@ -117,6 +118,9 @@ Default admin credentials come from `.env`:
 - `POST /api/admin/models/sync`
 - `GET /api/admin/usage`
 - `GET /api/admin/monitoring/overview`
+- `GET /api/admin/oauth-platforms`
+- `POST /api/admin/oauth-flows/start`
+- `POST /api/admin/oauth-flows/exchange`
 
 ### OpenAI-Compatible APIs
 
@@ -227,6 +231,7 @@ Core tables:
 - If your panel is accessed from a domain or public IP in production, set `CORS_ALLOW_ORIGINS=https://your-frontend.example.com,http://your-ip:8080`.
 - Upstream integrations can use multiple API keys with `round_robin`, `priority_fill`, or `random` access mode.
 - OAuth accounts can be attached to an upstream integration in `oauth_account` mode so stored access tokens can be reused as upstream credentials where bearer-token access is supported.
+- For provider OAuth imports, set `OAUTH_REDIRECT_BASE_URL` to the public backend base URL, for example `http://localhost:18437`, and copy the generated redirect URI from the OAuth account modal into the provider platform.
 
 ## Troubleshooting
 

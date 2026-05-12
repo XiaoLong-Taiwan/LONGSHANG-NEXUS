@@ -61,7 +61,7 @@ export default function APIKeysPage() {
       ) : null}
 
       <DataTable
-        columns={["Preview", "User", "Rate limit", "Status", "Created", "Actions"]}
+        columns={[t("apiKeys.preview"), t("apiKeys.user"), t("apiKeys.rateLimit"), t("apiKeys.status"), t("apiKeys.created"), t("common.actions")]}
         emptyMessage={t("common.empty")}
         rows={items.map((item) => [
           <code key={item.id}>{item.key_preview}</code>,
@@ -79,7 +79,7 @@ export default function APIKeysPage() {
               }}
               type="button"
             >
-              Rotate
+              {t("apiKeys.rotate")}
             </button>
             <button
               className="text-app-muted"
@@ -89,7 +89,7 @@ export default function APIKeysPage() {
               }}
               type="button"
             >
-              Disable
+              {t("apiKeys.disable")}
             </button>
             <button
               className="text-danger"
@@ -99,7 +99,7 @@ export default function APIKeysPage() {
               }}
               type="button"
             >
-              Delete
+              {t("common.delete")}
             </button>
           </div>,
         ])}

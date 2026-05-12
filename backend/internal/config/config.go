@@ -59,7 +59,7 @@ func Load() Config {
 		GoogleClientSecret:    getEnv("GOOGLE_CLIENT_SECRET", ""),
 		GitHubClientID:        getEnv("GITHUB_CLIENT_ID", ""),
 		GitHubClientSecret:    getEnv("GITHUB_CLIENT_SECRET", ""),
-		OAuthRedirectBaseURL:  getEnv("OAUTH_REDIRECT_BASE_URL", "http://localhost:8080"),
+		OAuthRedirectBaseURL:  getEnv("OAUTH_REDIRECT_BASE_URL", "http://localhost:18437"),
 		DefaultBalanceStrategy: getEnv("DEFAULT_BALANCE_STRATEGY", "priority"),
 		RequestTimeout:        getSeconds("REQUEST_TIMEOUT_SECONDS", 120),
 		ModelSyncInterval:     getSeconds("MODEL_SYNC_INTERVAL_SECONDS", 900),

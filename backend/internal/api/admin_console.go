@@ -2,10 +2,13 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -47,6 +50,18 @@ type providerDiscoveryRequest struct {
 	ProxyID        *string  `json:"proxy_id"`
 	TestModel      string   `json:"test_model"`
 	TestType       string   `json:"test_type"`
+}
+
+type oauthFlowRequest struct {
+	Provider              string            `json:"provider"`
+	ClientID              string            `json:"client_id"`
+	ClientSecret          string            `json:"client_secret"`
+	AuthorizationEndpoint string            `json:"authorization_endpoint"`
+	TokenEndpoint         string            `json:"token_endpoint"`
+	RedirectURI           string            `json:"redirect_uri"`
+	Code                  string            `json:"code"`
+	Scopes                []string          `json:"scopes"`
+	ExtraParams           map[string]string `json:"extra_params"`
 }
 
 type aggregateModelResponse struct {
@@ -167,6 +182,133 @@ func (h *Handler) DetectOAuthQuota(c *gin.Context) {
 		"quota_unit":       account.QuotaUnit,
 		"metadata":         metadata,
 	})
+}
+
+func (h *Handler) OAuthPlatforms(c *gin.Context) {
+	baseURL := strings.TrimRight(h.cfg.OAuthRedirectBaseURL, "/")
+	c.JSON(http.StatusOK, []gin.H{
+		oauthPlatform("codex", "Codex OAuth", "", "", []string{"openid", "profile", "email"}, baseURL, "Paste the authorization endpoint from the provider console or CLI output, then generate a callback URL."),
+		oauthPlatform("anthropic", "Anthropic OAuth", "", "", []string{"openid", "profile", "email"}, baseURL, "Anthropic OAuth availability depends on your account and app registration. Use the provider supplied authorize/token endpoints."),
+		oauthPlatform("antigravity", "Antigravity OAuth", "", "", []string{"openid", "profile", "email"}, baseURL, "Use the platform supplied OAuth authorize/token endpoints."),
+		oauthPlatform("gemini-cli", "Gemini CLI OAuth", "https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token", []string{"openid", "email", "profile", "https://www.googleapis.com/auth/generative-language.retriever"}, baseURL, "Register this redirect URI in Google Cloud, then paste the returned localhost callback URL or code."),
+		oauthPlatform("kimi", "Kimi OAuth", "", "", []string{"openid", "profile", "email"}, baseURL, "Use the OAuth endpoints exposed by your Kimi/OpenAI-compatible account."),
+		oauthPlatform("google", "Google OAuth", "https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token", []string{"openid", "email", "profile"}, baseURL, "Standard Google OAuth flow."),
+		oauthPlatform("github", "GitHub OAuth", "https://github.com/login/oauth/authorize", "https://github.com/login/oauth/access_token", []string{"read:user", "user:email"}, baseURL, "Standard GitHub OAuth flow."),
+	})
+}
+
+func (h *Handler) StartOAuthFlow(c *gin.Context) {
+	var payload oauthFlowRequest
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	providerName := strings.TrimSpace(payload.Provider)
+	if providerName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider is required"})
+		return
+	}
+	redirectURI := strings.TrimSpace(payload.RedirectURI)
+	if redirectURI == "" {
+		redirectURI = oauthCallbackURL(h.cfg.OAuthRedirectBaseURL, providerName)
+	}
+	authEndpoint := strings.TrimSpace(payload.AuthorizationEndpoint)
+	if authEndpoint == "" {
+		authEndpoint, _ = oauthKnownEndpoints(providerName)
+	}
+	state := randomState()
+	response := gin.H{
+		"provider":     providerName,
+		"redirect_uri": redirectURI,
+		"state":        state,
+		"manual":       authEndpoint == "",
+	}
+	if authEndpoint == "" {
+		response["message"] = "authorization_endpoint is required for this platform"
+		c.JSON(http.StatusOK, response)
+		return
+	}
+
+	authURL, err := buildOAuthAuthorizeURL(authEndpoint, payload.ClientID, redirectURI, state, payload.Scopes, payload.ExtraParams)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	response["auth_url"] = authURL
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *Handler) ExchangeOAuthCode(c *gin.Context) {
+	var payload oauthFlowRequest
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	tokenEndpoint := strings.TrimSpace(payload.TokenEndpoint)
+	if tokenEndpoint == "" {
+		_, tokenEndpoint = oauthKnownEndpoints(payload.Provider)
+	}
+	if tokenEndpoint == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "token_endpoint is required"})
+		return
+	}
+	if strings.TrimSpace(payload.Code) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "code is required"})
+		return
+	}
+	redirectURI := strings.TrimSpace(payload.RedirectURI)
+	if redirectURI == "" {
+		redirectURI = oauthCallbackURL(h.cfg.OAuthRedirectBaseURL, payload.Provider)
+	}
+
+	form := url.Values{}
+	form.Set("grant_type", "authorization_code")
+	form.Set("code", strings.TrimSpace(payload.Code))
+	form.Set("redirect_uri", redirectURI)
+	form.Set("client_id", strings.TrimSpace(payload.ClientID))
+	if strings.TrimSpace(payload.ClientSecret) != "" {
+		form.Set("client_secret", strings.TrimSpace(payload.ClientSecret))
+	}
+	request, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, tokenEndpoint, strings.NewReader(form.Encode()))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set("Accept", "application/json")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	defer response.Body.Close()
+	var tokenPayload map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&tokenPayload); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	if response.StatusCode >= 400 {
+		c.JSON(http.StatusBadGateway, gin.H{"error": tokenPayload})
+		return
+	}
+	c.JSON(http.StatusOK, tokenPayload)
+}
+
+func (h *Handler) OAuthCaptureCallback(c *gin.Context) {
+	providerName := c.Param("provider")
+	values := map[string]string{}
+	for key, items := range c.Request.URL.Query() {
+		if len(items) > 0 {
+			values[key] = items[0]
+		}
+	}
+	if c.GetHeader("Accept") == "application/json" {
+		c.JSON(http.StatusOK, gin.H{"provider": providerName, "params": values})
+		return
+	}
+	payload, _ := json.MarshalIndent(gin.H{"provider": providerName, "params": values}, "", "  ")
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.String(http.StatusOK, `<!doctype html><html><head><meta charset="utf-8"><title>OAuth Captured</title></head><body style="font-family:system-ui;padding:24px;line-height:1.5"><h1>OAuth callback captured</h1><p>Copy this page URL back into the AI Gateway OAuth modal, or copy the JSON below.</p><pre style="white-space:pre-wrap;background:#f3f4f6;padding:16px;border-radius:12px">%s</pre></body></html>`, string(payload))
 }
 
 func (h *Handler) GetSettings(c *gin.Context) {
@@ -435,7 +577,7 @@ func (h *Handler) buildProviderRoute(ctx context.Context, payload providerDiscov
 		Model:    strings.TrimSpace(payload.TestModel),
 		ProviderKey: models.ProviderKey{
 			Provider: providerName,
-			BaseURL:  strings.TrimSpace(payload.BaseURL),
+			BaseURL:  defaultBaseURLForProvider(providerName, payload.BaseURL),
 		},
 		ProxyNode:  proxyNode,
 		Credential: credential,
@@ -457,6 +599,73 @@ func defaultGatewaySettings() map[string]any {
 		"anthropic_cache_ttl_injection":       false,
 		"rewrite_message_cache_breakpoints":   false,
 	}
+}
+
+func oauthPlatform(provider, label, authorizationEndpoint, tokenEndpoint string, scopes []string, baseURL, notes string) gin.H {
+	return gin.H{
+		"provider":               provider,
+		"label":                  label,
+		"authorization_endpoint": authorizationEndpoint,
+		"token_endpoint":         tokenEndpoint,
+		"default_scopes":         scopes,
+		"redirect_uri":           oauthCallbackURL(baseURL, provider),
+		"notes":                  notes,
+	}
+}
+
+func oauthCallbackURL(baseURL, providerName string) string {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if baseURL == "" {
+		baseURL = "http://localhost:18437"
+	}
+	return fmt.Sprintf("%s/api/oauth/callback/%s", baseURL, url.PathEscape(strings.TrimSpace(providerName)))
+}
+
+func oauthKnownEndpoints(providerName string) (string, string) {
+	switch strings.TrimSpace(providerName) {
+	case "google", "gemini-cli":
+		return "https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token"
+	case "github":
+		return "https://github.com/login/oauth/authorize", "https://github.com/login/oauth/access_token"
+	default:
+		return "", ""
+	}
+}
+
+func buildOAuthAuthorizeURL(endpoint, clientID, redirectURI, state string, scopes []string, extraParams map[string]string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(endpoint))
+	if err != nil {
+		return "", err
+	}
+	query := parsed.Query()
+	query.Set("response_type", "code")
+	query.Set("client_id", strings.TrimSpace(clientID))
+	query.Set("redirect_uri", redirectURI)
+	query.Set("state", state)
+	if len(scopes) > 0 {
+		query.Set("scope", strings.Join(normalizeStringList(scopes), " "))
+	}
+	if _, exists := query["access_type"]; !exists {
+		query.Set("access_type", "offline")
+	}
+	if _, exists := query["prompt"]; !exists {
+		query.Set("prompt", "consent")
+	}
+	for key, value := range extraParams {
+		if strings.TrimSpace(key) != "" && strings.TrimSpace(value) != "" {
+			query.Set(strings.TrimSpace(key), strings.TrimSpace(value))
+		}
+	}
+	parsed.RawQuery = query.Encode()
+	return parsed.String(), nil
+}
+
+func randomState() string {
+	data := make([]byte, 18)
+	if _, err := rand.Read(data); err != nil {
+		return fmt.Sprint(time.Now().UnixNano())
+	}
+	return base64.RawURLEncoding.EncodeToString(data)
 }
 
 func firstChoiceText(response *openai.ChatCompletionResponse) string {

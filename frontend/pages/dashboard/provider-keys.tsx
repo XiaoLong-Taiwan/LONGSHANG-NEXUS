@@ -257,8 +257,8 @@ export default function ProviderKeysPage() {
         description={t("provider.description")}
         action={
           <div className="flex flex-wrap gap-3">
-            <button className="btn-secondary" onClick={() => openCreateModal("oauth")} type="button">New OAuth Upstream</button>
-            <button className="btn-primary" onClick={() => openCreateModal("api")} type="button">New API Upstream</button>
+            <button className="btn-secondary" onClick={() => openCreateModal("oauth")} type="button">{t("provider.addOAuth")}</button>
+            <button className="btn-primary" onClick={() => openCreateModal("api")} type="button">{t("provider.addApi")}</button>
           </div>
         }
       />
@@ -267,38 +267,38 @@ export default function ProviderKeysPage() {
 
       <div className="grid gap-4 xl:grid-cols-2">
         <DataTable
-          columns={["Name", "Provider", "Models", "Proxy", "Status", "Actions"]}
-          emptyMessage={loading ? "Loading..." : t("common.empty")}
+          columns={[t("provider.tableName"), t("provider.tableProvider"), t("provider.tableModels"), t("provider.tableProxy"), t("provider.tableStatus"), t("provider.tableActions")]}
+          emptyMessage={loading ? t("common.loading") : t("common.empty")}
           rows={items.filter((item) => item.auth_mode === "api_key").map((item) => [
             renderUpstreamName(item),
             item.provider,
-            modelCountLabel(item),
-            proxyLabel(proxyNodes, item.proxy_id),
+            modelCountLabel(item, t),
+            proxyLabel(proxyNodes, item.proxy_id, t),
             <span key={item.id} className="badge-muted">{item.status}</span>,
-            renderActions(item, openEditModal, handleDelete),
+            renderActions(item, openEditModal, handleDelete, t),
           ])}
         />
 
         <DataTable
-          columns={["Name", "Provider", "OAuth", "Proxy", "Status", "Actions"]}
-          emptyMessage={loading ? "Loading..." : t("common.empty")}
+          columns={[t("provider.tableName"), t("provider.tableProvider"), t("provider.tableOAuth"), t("provider.tableProxy"), t("provider.tableStatus"), t("provider.tableActions")]}
+          emptyMessage={loading ? t("common.loading") : t("common.empty")}
           rows={items.filter((item) => item.auth_mode === "oauth_account").map((item) => [
             renderUpstreamName(item),
             item.provider,
             oauthLabel(oauthAccounts, item.oauth_account_id),
-            proxyLabel(proxyNodes, item.proxy_id),
+            proxyLabel(proxyNodes, item.proxy_id, t),
             <span key={item.id} className="badge-muted">{item.status}</span>,
-            renderActions(item, openEditModal, handleDelete),
+            renderActions(item, openEditModal, handleDelete, t),
           ])}
         />
       </div>
 
       <Modal
         closeLabel={t("common.close")}
-        description={modalMode === "oauth" ? "Use an imported OAuth token as the upstream credential source." : "Use one or more API keys with custom routing, testing, and model overrides."}
+        description={modalMode === "oauth" ? t("provider.modalOAuthDescription") : t("provider.modalApiDescription")}
         open={modalMode !== "closed"}
         onClose={closeModal}
-        title={form.id ? (modalMode === "oauth" ? "Edit OAuth upstream" : "Edit API upstream") : (modalMode === "oauth" ? "Create OAuth upstream" : "Create API upstream")}
+        title={form.id ? (modalMode === "oauth" ? t("provider.modalOAuthEditTitle") : t("provider.modalApiEditTitle")) : (modalMode === "oauth" ? t("provider.modalOAuthCreateTitle") : t("provider.modalApiCreateTitle"))}
       >
         <div className="grid gap-6">
           {errors.length > 0 ? (
@@ -338,7 +338,7 @@ export default function ProviderKeysPage() {
               <label className="grid gap-2 lg:col-span-2">
                 <span className="text-sm font-medium text-app">{t("provider.oauthAccount")}</span>
                 <select className="field" value={form.oauth_account_id || ""} onChange={(event) => setForm({ ...form, oauth_account_id: event.target.value })}>
-                  <option value="">Select OAuth account</option>
+                  <option value="">{t("provider.noOAuth")}</option>
                   {oauthAccounts.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.name || item.provider} {item.quota_total ? `(${item.quota_used}/${item.quota_total} ${item.quota_unit || ""})` : ""}
@@ -402,7 +402,7 @@ export default function ProviderKeysPage() {
                   <option value="embeddings">{t("provider.testEmbeddingType")}</option>
                   <option value="image">{t("provider.testImageType")}</option>
                 </select>
-                <input className="field" placeholder="Test model" value={form.test_model} onChange={(event) => setForm({ ...form, test_model: event.target.value })} />
+                <input className="field" placeholder={t("provider.testModel")} value={form.test_model} onChange={(event) => setForm({ ...form, test_model: event.target.value })} />
                 <button className="btn-secondary" disabled={testing} onClick={handleTestConnection} type="button">
                   {testing ? t("common.testing") : t("provider.testConnection")}
                 </button>
@@ -413,7 +413,7 @@ export default function ProviderKeysPage() {
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-app">{t("provider.models")}</span>
                 <div className="flex gap-3">
-                  <button className="btn-secondary" onClick={addModelRow} type="button">{t("provider.addKey")}</button>
+                  <button className="btn-secondary" onClick={addModelRow} type="button">{t("provider.addModel")}</button>
                   <button className="btn-secondary" disabled={discovering} onClick={handleDiscoverModels} type="button">
                     {discovering ? t("common.testing") : t("provider.syncModels")}
                   </button>
@@ -421,7 +421,7 @@ export default function ProviderKeysPage() {
               </div>
               {form.model_overrides.length === 0 ? (
                 <div className="rounded-[15px] border border-dashed border-app px-4 py-4 text-sm text-app-muted">
-                  No models added yet.
+                  {t("provider.noModels")}
                 </div>
               ) : null}
               {form.model_overrides.map((item, index) => (
@@ -440,7 +440,7 @@ export default function ProviderKeysPage() {
 
           {testResult ? (
             <div className="panel p-4">
-              <p className="text-sm font-semibold text-app">Test result</p>
+              <p className="text-sm font-semibold text-app">{t("provider.testResult")}</p>
               <pre className="mt-3 overflow-auto text-xs text-app-muted">{JSON.stringify(testResult, null, 2)}</pre>
             </div>
           ) : null}
@@ -479,23 +479,24 @@ function renderUpstreamName(item: ProviderIntegration) {
 function renderActions(
   item: ProviderIntegration,
   onEdit: (item: ProviderIntegration) => void,
-  onDelete: (item: ProviderIntegration) => Promise<void>
+  onDelete: (item: ProviderIntegration) => Promise<void>,
+  t: (key: string) => string
 ) {
   return (
     <div key={`action-${item.id}`} className="flex flex-wrap gap-3">
-      <button className="text-app-muted" onClick={() => onEdit(item)} type="button">Edit</button>
-      <button className="text-danger" onClick={() => void onDelete(item)} type="button">Delete</button>
+      <button className="text-app-muted" onClick={() => onEdit(item)} type="button">{t("common.edit")}</button>
+      <button className="text-danger" onClick={() => void onDelete(item)} type="button">{t("common.delete")}</button>
     </div>
   );
 }
 
-function modelCountLabel(item: ProviderIntegration) {
-  return item.model_overrides.length > 0 ? `${item.model_overrides.length} models` : "-";
+function modelCountLabel(item: ProviderIntegration, t: (key: string) => string) {
+  return item.model_overrides.length > 0 ? `${item.model_overrides.length} ${t("provider.models")}` : "-";
 }
 
-function proxyLabel(items: ProxyNode[], proxyID?: string | null) {
+function proxyLabel(items: ProxyNode[], proxyID: string | null | undefined, t: (key: string) => string) {
   const match = items.find((item) => item.id === proxyID);
-  return match ? `${match.host}:${match.port}` : "Direct";
+  return match ? `${match.host}:${match.port}` : t("provider.noProxy");
 }
 
 function oauthLabel(items: OAuthAccount[], oauthID?: string | null) {

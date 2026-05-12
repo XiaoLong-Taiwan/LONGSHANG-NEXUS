@@ -60,7 +60,7 @@ export default function ModelsPage() {
       {feedback ? <div className="alert-info">{feedback}</div> : null}
 
       <DataTable
-        columns={[t("models.model"), t("models.provider"), t("models.type"), t("models.upstreams"), t("models.lastChecked"), "Actions"]}
+        columns={[t("models.model"), t("models.provider"), t("models.type"), t("models.upstreams"), t("models.lastChecked"), t("common.actions")]}
         emptyMessage={t("common.empty")}
         rows={items.map((item) => [
           <code key={item.model_name}>{item.model_name}</code>,
@@ -68,16 +68,16 @@ export default function ModelsPage() {
           item.types.join(", "),
           item.upstreams.length,
           item.last_checked ? new Date(item.last_checked).toLocaleString() : "-",
-          <button className="text-app-muted" onClick={() => setDetail(item)} type="button">View</button>,
+          <button className="text-app-muted" onClick={() => setDetail(item)} type="button">{t("models.view")}</button>,
         ])}
       />
 
       <Modal
         closeLabel={t("common.close")}
-        description="Inspect which upstream integrations expose this model."
+        description={t("models.detailDescription")}
         open={detail !== null}
         onClose={() => setDetail(null)}
-        title={detail?.model_name || "Model detail"}
+        title={detail?.model_name || t("models.detail")}
       >
         <div className="grid gap-3">
           {(detail?.upstreams || []).map((item) => (

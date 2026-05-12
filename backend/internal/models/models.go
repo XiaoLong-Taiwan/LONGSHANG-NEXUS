@@ -139,3 +139,11 @@ func ensureID(id *string) error {
 func (ModelRegistry) TableName() string {
 	return "model_registry"
 }
+
+func (OAuthAccount) TableName() string {
+	return "oauth_accounts"
+}
+
+func (GatewaySetting) TableName() string {
+	return "gateway_settings"
+}

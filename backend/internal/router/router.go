@@ -32,6 +32,7 @@ func Setup(cfg config.Config, db *gorm.DB, redis *redis.Client, handler *api.Han
 		authGroup.GET("/oauth/:provider/login", handler.OAuthLogin)
 		authGroup.GET("/oauth/:provider/callback", handler.OAuthCallback)
 	}
+	engine.GET("/api/oauth/callback/:provider", handler.OAuthCaptureCallback)
 
 	authProtected := engine.Group("/api/auth")
 	authProtected.Use(middleware.JWTAuth(cfg, db))
@@ -65,6 +66,9 @@ func Setup(cfg config.Config, db *gorm.DB, redis *redis.Client, handler *api.Han
 		admin.DELETE("/proxy-nodes/:id", handler.DeleteProxyNode)
 
 		admin.GET("/oauth-accounts", handler.ListOAuthAccounts)
+		admin.GET("/oauth-platforms", handler.OAuthPlatforms)
+		admin.POST("/oauth-flows/start", handler.StartOAuthFlow)
+		admin.POST("/oauth-flows/exchange", handler.ExchangeOAuthCode)
 		admin.POST("/oauth-accounts", handler.UpsertOAuthAccount)
 		admin.PUT("/oauth-accounts/:id", handler.UpsertOAuthAccount)
 		admin.DELETE("/oauth-accounts/:id", handler.DeleteOAuthAccount)

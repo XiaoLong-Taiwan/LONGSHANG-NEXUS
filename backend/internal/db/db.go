@@ -39,10 +39,16 @@ func Connect(cfg config.Config) (*Clients, error) {
 		); err != nil {
 			return nil, fmt.Errorf("migrate database: %w", err)
 		}
+		if err := ensureOAuthTableCompatibility(database); err != nil {
+			return nil, err
+		}
 		if err := ensureFeatureSchema(database); err != nil {
 			return nil, err
 		}
 	} else {
+		if err := ensureOAuthTableCompatibility(database); err != nil {
+			return nil, err
+		}
 		if err := verifySchema(database); err != nil {
 			return nil, err
 		}
@@ -141,6 +147,38 @@ func ensureFeatureSchema(database *gorm.DB) error {
 	for _, statement := range statements {
 		if err := database.Exec(statement).Error; err != nil {
 			return fmt.Errorf("ensure feature schema: %w", err)
+		}
+	}
+	return nil
+}
+
+func ensureOAuthTableCompatibility(database *gorm.DB) error {
+	statements := []string{
+		`DO $$
+		BEGIN
+		  IF to_regclass('public.o_auth_accounts') IS NOT NULL
+		     AND to_regclass('public.oauth_accounts') IS NULL THEN
+		    ALTER TABLE o_auth_accounts RENAME TO oauth_accounts;
+		  END IF;
+		END $$`,
+		`DO $$
+		BEGIN
+		  IF to_regclass('public.o_auth_accounts') IS NOT NULL
+		     AND to_regclass('public.oauth_accounts') IS NOT NULL THEN
+		    INSERT INTO oauth_accounts (
+		      id, provider, user_id, access_token, refresh_token, proxy_id, created_at, updated_at
+		    )
+		    SELECT id, provider, user_id, access_token, refresh_token, proxy_id, created_at, updated_at
+		      FROM o_auth_accounts
+		     WHERE NOT EXISTS (
+		       SELECT 1 FROM oauth_accounts WHERE oauth_accounts.id = o_auth_accounts.id
+		     );
+		  END IF;
+		END $$`,
+	}
+	for _, statement := range statements {
+		if err := database.Exec(statement).Error; err != nil {
+			return fmt.Errorf("ensure oauth table compatibility: %w", err)
 		}
 	}
 	return nil

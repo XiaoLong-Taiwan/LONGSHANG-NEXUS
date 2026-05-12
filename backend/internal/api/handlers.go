@@ -400,7 +400,7 @@ func (h *Handler) UpsertProviderKey(c *gin.Context) {
 		APIKeys:               datatypes.JSON(serializedKeys),
 		AuthMode:              payload.AuthMode,
 		OAuthAccountID:        normalizeNullableString(payload.OAuthAccountID),
-		BaseURL:               strings.TrimSpace(payload.BaseURL),
+		BaseURL:               defaultBaseURLForProvider(strings.TrimSpace(payload.Provider), strings.TrimSpace(payload.BaseURL)),
 		AccessMode:            payload.AccessMode,
 		Priority:              priority,
 		ProxyID:               normalizeNullableString(payload.ProxyID),
@@ -879,4 +879,18 @@ func firstOrEmpty(values []string) string {
 		return ""
 	}
 	return values[0]
+}
+
+func defaultBaseURLForProvider(providerName, baseURL string) string {
+	if strings.TrimSpace(baseURL) != "" {
+		return strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	}
+	switch strings.TrimSpace(providerName) {
+	case "deepseek":
+		return "https://api.deepseek.com"
+	case "mistral":
+		return "https://api.mistral.ai"
+	default:
+		return ""
+	}
 }

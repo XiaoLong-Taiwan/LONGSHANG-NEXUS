@@ -42,7 +42,7 @@ export default function UsersPage() {
       />
       {feedback ? <div className="alert-info">{feedback}</div> : null}
       <DataTable
-        columns={[t("users.email"), t("users.role"), "Created", "Action"]}
+        columns={[t("users.email"), t("users.role"), t("users.created"), t("common.actions")]}
         emptyMessage={t("common.empty")}
         rows={users.map((user) => [
           user.email,
@@ -57,7 +57,7 @@ export default function UsersPage() {
             }}
             type="button"
           >
-            Delete
+            {t("common.delete")}
           </button>,
         ])}
       />
