@@ -3,9 +3,10 @@ import { ReactNode } from "react";
 type Props = {
   columns: string[];
   rows: ReactNode[][];
+  emptyMessage?: string;
 };
 
-export default function DataTable({ columns, rows }: Props) {
+export default function DataTable({ columns, rows, emptyMessage = "No data available yet." }: Props) {
   return (
     <div className="panel overflow-hidden">
       <div className="overflow-x-auto">
@@ -20,7 +21,13 @@ export default function DataTable({ columns, rows }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
-            {rows.map((row, index) => (
+            {rows.length === 0 ? (
+              <tr>
+                <td className="px-4 py-8 text-center text-slate-500" colSpan={columns.length}>
+                  {emptyMessage}
+                </td>
+              </tr>
+            ) : rows.map((row, index) => (
               <tr key={index} className="align-top">
                 {row.map((cell, cellIndex) => (
                   <td key={`${index}-${cellIndex}`} className="px-4 py-3 text-slate-700">

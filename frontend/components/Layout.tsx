@@ -50,8 +50,8 @@ export default function Layout({ children }: PropsWithChildren) {
               <p className="text-xs uppercase tracking-[0.32em] text-white/60">AI Gateway</p>
               <LanguageSwitcher />
             </div>
-            <h1 className="mt-3 text-3xl font-semibold">Control Plane</h1>
-            <p className="mt-3 text-sm text-white/70">OpenAI-compatible routing for OpenAI, Claude, Gemini, proxy pools, key rotation, and monitoring.</p>
+            <h1 className="mt-3 text-3xl font-semibold">{t("layout.title")}</h1>
+            <p className="mt-3 text-sm text-white/70">{t("layout.subtitle")}</p>
             <div className="mt-5 rounded-2xl bg-white/10 px-4 py-3 text-sm text-white/85">
               {t("layout.connectedBackend")}: <span className="font-semibold">{connectionName}</span>
             </div>

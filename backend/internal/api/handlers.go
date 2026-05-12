@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"ai-gateway/backend/internal/auth"
@@ -29,6 +30,22 @@ type Handler struct {
 	usage      *services.UsageService
 	monitoring *services.MonitoringService
 	modelSync  *services.ModelSyncService
+}
+
+type providerKeyUpsertRequest struct {
+	Name                  string   `json:"name"`
+	Description           string   `json:"description"`
+	Provider              string   `json:"provider"`
+	APIKey                string   `json:"api_key"`
+	APIKeys               []string `json:"api_keys"`
+	AuthMode              string   `json:"auth_mode"`
+	OAuthAccountID        *string  `json:"oauth_account_id"`
+	BaseURL               string   `json:"base_url"`
+	AccessMode            string   `json:"access_mode"`
+	Priority              *int     `json:"priority"`
+	ProxyID               *string  `json:"proxy_id"`
+	Status                string   `json:"status"`
+	ModelDetectionEnabled *bool    `json:"model_detection_enabled"`
 }
 
 func NewHandler(cfg config.Config, db *gorm.DB, providers *providers.Manager, keyPool *services.ProviderKeyPool, modelRouter *services.ModelRouter, usage *services.UsageService, monitoring *services.MonitoringService, modelSync *services.ModelSyncService) *Handler {
@@ -318,53 +335,99 @@ func (h *Handler) ListProviderKeys(c *gin.Context) {
 }
 
 func (h *Handler) UpsertProviderKey(c *gin.Context) {
-	var payload models.ProviderKey
+	var payload providerKeyUpsertRequest
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if payload.Status == "" {
-		payload.Status = "active"
+	if strings.TrimSpace(payload.Provider) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider is required"})
+		return
 	}
-	if payload.Priority == 0 {
-		payload.Priority = 100
-	}
-	if payload.Name == "" {
+	if strings.TrimSpace(payload.Name) == "" {
 		payload.Name = payload.Provider
-	}
-	if payload.AccessMode == "" {
-		payload.AccessMode = "round_robin"
 	}
 	if payload.AuthMode == "" {
 		payload.AuthMode = "api_key"
 	}
-	if len(payload.APIKeys) == 0 && payload.APIKey != "" {
-		serialized, _ := json.Marshal([]string{payload.APIKey})
-		payload.APIKeys = datatypes.JSON(serialized)
+	if payload.AccessMode == "" {
+		payload.AccessMode = "round_robin"
 	}
-	if len(payload.APIKeys) > 0 {
-		var items []string
-		if err := json.Unmarshal(payload.APIKeys, &items); err == nil && len(items) > 0 {
-			payload.APIKey = items[0]
-		}
+	if payload.Status == "" {
+		payload.Status = "active"
 	}
-	if id := c.Param("id"); id != "" {
-		payload.ID = id
+	if payload.AuthMode == "oauth_account" && (payload.OAuthAccountID == nil || strings.TrimSpace(*payload.OAuthAccountID) == "") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "oauth_account_id is required for oauth auth mode"})
+		return
+	}
+	if payload.AuthMode != "oauth_account" && len(normalizeStringList(payload.APIKeys)) == 0 && strings.TrimSpace(payload.APIKey) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one api key is required"})
+		return
 	}
 
-	if payload.ID == "" {
-		if err := h.db.Create(&payload).Error; err != nil {
+	modelDetectionEnabled := true
+	if payload.ModelDetectionEnabled != nil {
+		modelDetectionEnabled = *payload.ModelDetectionEnabled
+	}
+	priority := 100
+	if payload.Priority != nil {
+		priority = *payload.Priority
+	}
+	if priority < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "priority must be greater than or equal to 0"})
+		return
+	}
+
+	normalizedKeys := normalizeStringList(payload.APIKeys)
+	if len(normalizedKeys) == 0 && strings.TrimSpace(payload.APIKey) != "" {
+		normalizedKeys = []string{strings.TrimSpace(payload.APIKey)}
+	}
+	if payload.AuthMode == "oauth_account" {
+		normalizedKeys = nil
+		payload.APIKey = ""
+	}
+
+	serializedKeys, _ := json.Marshal(normalizedKeys)
+	record := models.ProviderKey{
+		Name:                  strings.TrimSpace(payload.Name),
+		Description:           strings.TrimSpace(payload.Description),
+		Provider:              strings.TrimSpace(payload.Provider),
+		APIKey:                firstOrEmpty(normalizedKeys),
+		APIKeys:               datatypes.JSON(serializedKeys),
+		AuthMode:              payload.AuthMode,
+		OAuthAccountID:        normalizeNullableString(payload.OAuthAccountID),
+		BaseURL:               strings.TrimSpace(payload.BaseURL),
+		AccessMode:            payload.AccessMode,
+		Priority:              priority,
+		ProxyID:               normalizeNullableString(payload.ProxyID),
+		Status:                payload.Status,
+		ModelDetectionEnabled: modelDetectionEnabled,
+	}
+
+	id := c.Param("id")
+	if id == "" {
+		if err := h.db.Create(&record).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusCreated, payload)
+		c.JSON(http.StatusCreated, record)
 		return
 	}
-	if err := h.db.Save(&payload).Error; err != nil {
+
+	existing := models.ProviderKey{}
+	if err := h.db.First(&existing, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "provider key not found"})
+		return
+	}
+
+	record.ID = existing.ID
+	record.CreatedAt = existing.CreatedAt
+	record.UsageCount = existing.UsageCount
+	if err := h.db.Save(&record).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, payload)
+	c.JSON(http.StatusOK, record)
 }
 
 func (h *Handler) DetectProviderKeyModels(c *gin.Context) {
@@ -779,4 +842,33 @@ func errorText(err error, fallback string) string {
 		return fallback
 	}
 	return err.Error()
+}
+
+func normalizeStringList(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
+func normalizeNullableString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
+func firstOrEmpty(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
 }

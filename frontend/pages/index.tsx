@@ -40,10 +40,10 @@ export default function HomePage() {
       if (router.query.error === "admin") {
         setError(t("login.noAdmin"));
       } else if (router.query.error === "session") {
-        setError("Your previous session is no longer valid. Please sign in again.");
+        setError(t("login.sessionExpired"));
       }
     }
-  }, [router]);
+  }, [router, t]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -59,7 +59,7 @@ export default function HomePage() {
       setToken(result.token);
       router.push("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : t("login.loginFailed"));
     } finally {
       setLoading(false);
     }
@@ -67,10 +67,10 @@ export default function HomePage() {
 
   async function handleCheckConnection() {
     setChecking(true);
-    setConnectionStatus("Checking...");
+    setConnectionStatus(t("login.checking"));
     try {
       const result = await probeConnection();
-      setConnectionStatus(`Connected: ${result.service}`);
+      setConnectionStatus(t("login.connectedTo", { service: result.service }));
     } catch (err) {
       setConnectionStatus(err instanceof Error ? err.message : "Connection failed");
     } finally {
@@ -89,7 +89,7 @@ export default function HomePage() {
     setConnections(items);
     setActiveConnection(connection.id);
     setActiveConnectionId(connection.id);
-    setConnectionStatus(`Saved backend: ${connection.name}`);
+    setConnectionStatus(t("login.savedBackend", { name: connection.name }));
     setShowConnectionForm(false);
     setConnectionForm({
       id: "",
@@ -109,16 +109,16 @@ export default function HomePage() {
           <LanguageSwitcher />
         </div>
         <h1 className="max-w-3xl text-5xl font-semibold leading-tight text-slate-950 md:text-6xl">
-          One API surface for <span className="text-accent">OpenAI</span>, <span className="text-sea">Gemini</span>, and <span className="text-leaf">Claude</span>.
+          {t("login.heroTitle")}
         </h1>
         <p className="max-w-2xl text-lg text-slate-600">
-          The gateway normalizes chat, embeddings, images, API key policy, provider rotation, proxy routing, and monitoring into a single OpenAI SDK-compatible control plane.
+          {t("login.heroSubtitle")}
         </p>
         <div className="grid gap-4 md:grid-cols-3">
           {[
-            "Clear frontend/backend split",
-            "Multi-backend control plane",
-            "Optional HTTPS on both sides",
+            t("login.heroPoint1"),
+            t("login.heroPoint2"),
+            t("login.heroPoint3"),
           ].map((item) => (
             <div key={item} className="panel p-5 text-sm font-medium text-slate-700">
               {item}
@@ -129,8 +129,8 @@ export default function HomePage() {
 
       <section className="panel p-8">
         <div className="mb-6">
-          <p className="text-sm font-medium text-slate-500">Admin sign-in</p>
-          <h2 className="mt-2 text-3xl font-semibold text-slate-950">{t("login.title")}</h2>
+          <p className="text-sm font-medium text-slate-500">{t("login.cardEyebrow")}</p>
+          <h2 className="mt-2 text-3xl font-semibold text-slate-950">{t("login.cardTitle")}</h2>
           <p className="mt-2 text-sm text-slate-500">
             {t("login.subtitle")}
           </p>
@@ -144,7 +144,7 @@ export default function HomePage() {
               setActiveConnectionId(event.target.value);
               setActiveConnection(event.target.value);
               const active = loadConnections().find((item) => item.id === event.target.value);
-              setConnectionStatus(active ? `Selected: ${active.name}` : "Not checked");
+              setConnectionStatus(active ? t("login.selectedBackend", { name: active.name }) : "Not checked");
             }}
           >
             {connections.map((item) => (
@@ -187,7 +187,7 @@ export default function HomePage() {
           </p>
           <p className="mt-2">{t("login.connectionStatus")}: <span className="font-semibold text-slate-900">{connectionStatus}</span></p>
           <p className="mt-2">
-            Need another backend? After login, open the <span className="font-semibold text-slate-900">Connections</span> page to add or switch nodes.
+            {t("login.manageConnections")}
           </p>
         </div>
       </section>

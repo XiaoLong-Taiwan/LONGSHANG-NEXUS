@@ -11,9 +11,9 @@ export default function LanguageSwitcher() {
         value={locale}
         onChange={(event) => setLocale(event.target.value as Locale)}
       >
-        <option value="en">English</option>
-        <option value="zh-CN">简体中文</option>
-        <option value="zh-TW">繁體中文</option>
+        <option value="en">{t("language.en")}</option>
+        <option value="zh-CN">{t("language.zh-CN")}</option>
+        <option value="zh-TW">{t("language.zh-TW")}</option>
       </select>
     </label>
   );

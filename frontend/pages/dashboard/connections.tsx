@@ -41,41 +41,44 @@ export default function ConnectionsPage() {
     upsertConnection(connection);
     setForm(emptyForm);
     refresh();
+    setStatus(t("connections.saved", { name: connection.name }));
   }
 
   return (
     <Layout>
       <PageHeader title={t("connections.title")} description={t("connections.description")} />
 
-      {status ? <div className="panel p-6 text-slate-700">{status}</div> : null}
+      {status ? <div className="alert-info">{status}</div> : null}
 
       <form className="panel grid gap-4 p-6 md:grid-cols-4" onSubmit={handleSubmit}>
-        <input className="field" placeholder="Connection name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-        <input className="field md:col-span-2" placeholder="Backend base URL" value={form.baseUrl} onChange={(event) => setForm({ ...form, baseUrl: event.target.value })} />
+        <input className="field" placeholder={t("connections.name")} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+        <input className="field md:col-span-2" placeholder={t("connections.baseUrl")} value={form.baseUrl} onChange={(event) => setForm({ ...form, baseUrl: event.target.value })} />
         <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
           <input type="checkbox" checked={form.allowInsecureTls} onChange={(event) => setForm({ ...form, allowInsecureTls: event.target.checked })} />
-          Allow self-signed HTTPS
+          {t("login.allowSelfSigned")}
         </label>
-        <button className="btn-primary md:col-span-4" type="submit">Save connection</button>
+        <button className="btn-primary md:col-span-4" type="submit">{t("connections.save")}</button>
       </form>
 
       <DataTable
-        columns={["Name", "Base URL", "TLS", "Status", "Actions"]}
+        columns={[t("provider.tableName"), t("connections.baseUrl"), t("connections.tls"), t("connections.status"), t("connections.actions")]}
+        emptyMessage={t("common.empty")}
         rows={items.map((item) => [
           item.name,
           <code key={item.id}>{item.baseUrl}</code>,
-          item.allowInsecureTls ? "self-signed allowed" : "strict",
-          item.id === activeId ? "active" : "idle",
+          item.allowInsecureTls ? t("connections.insecureTls") : t("connections.strictTls"),
+          item.id === activeId ? t("connections.active") : t("connections.idle"),
           <div key={`actions-${item.id}`} className="flex gap-3">
             <button
               className="text-sea"
               onClick={async () => {
                 setActiveConnection(item.id);
                 refresh();
-                setStatus(`Active backend switched to ${item.name}`);
+                setStatus(t("connections.switched", { name: item.name }));
               }}
+              type="button"
             >
-              Activate
+              {t("connections.activate")}
             </button>
             <button
               className="text-amber-600"
@@ -83,13 +86,14 @@ export default function ConnectionsPage() {
                 setActiveConnection(item.id);
                 try {
                   const result = await probeConnection();
-                  setStatus(`${item.name} reachable: ${result.service}`);
-                } catch (err) {
-                  setStatus(err instanceof Error ? err.message : "Connection test failed");
+                  setStatus(t("connections.reachable", { name: item.name, service: result.service }));
+                } catch (error) {
+                  setStatus(error instanceof Error ? error.message : t("common.unknownError"));
                 }
               }}
+              type="button"
             >
-              Test
+              {t("connections.test")}
             </button>
             <button
               className="text-danger"
@@ -97,8 +101,9 @@ export default function ConnectionsPage() {
                 removeConnection(item.id);
                 refresh();
               }}
+              type="button"
             >
-              Delete
+              {t("connections.delete")}
             </button>
           </div>,
         ])}

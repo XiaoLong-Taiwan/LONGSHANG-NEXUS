@@ -28,6 +28,8 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const headers = { ...req.headers };
   delete headers.host;
   delete headers["content-length"];
+  delete headers.origin;
+  delete headers.referer;
   delete headers["x-ai-gateway-target"];
   delete headers["x-ai-gateway-insecure-tls"];
 
